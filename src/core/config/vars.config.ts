@@ -6,4 +6,6 @@ export const varsSchema = Joi.object({
   NODE_ENV: Joi.string()
     .valid('development', 'production', 'test', 'provision')
     .default('development'),
+  CORS_ORIGINS: Joi.string().required(),
+  API_PREFIX: Joi.string().required(),
 });
