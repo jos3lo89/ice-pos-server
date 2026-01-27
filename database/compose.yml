@@ -1,0 +1,15 @@
+services:
+  db:
+    image: postgres:15-alpine
+    container_name: pg15
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: rem
+      POSTGRES_PASSWORD: rem123
+      POSTGRES_DB: icedb
+    volumes:
+      - pg_data:/var/lib/postgresql/data
+
+volumes:
+  pg_data:
