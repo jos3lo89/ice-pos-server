@@ -1,28 +1,26 @@
 // src/modules/auth/strategies/jwt.strategy.ts
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PassportStrategy } from '@nestjs/passport';
-import { Injectable, UnauthorizedException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config'; // Asumiendo que usas config service
+import { Injectable } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { JwtPayload } from 'src/common/interfaces/jwt-payload.interface';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor(configService: ConfigService) {
+  constructor(private readonly configService: ConfigService) {
     super({
-      // EXTRAE EL TOKEN DE LA COOKIE, NO DEL HEADER
       jwtFromRequest: ExtractJwt.fromExtractors([
         (request: Request) => {
-          return request?.cookies?.Authentication; // Nombre de la cookie
+          return request?.cookies?.Authentication;
         },
       ]),
       ignoreExpiration: false,
-      secretOrKey: configService.get('JWT_SECRET') || 'secretKey', // Usa variables de entorno
+      secretOrKey: configService.get<string>('JWT_SECRET') || 'secretKey',
     });
   }
 
   async validate(payload: JwtPayload) {
-    // Lo que retornes aquí se inyecta en req.user
-    return { id: payload.sub, email: payload.email, roles: payload.roles };
+    return { id: payload.sub, userName: payload.userName, role: payload.role };
   }
 }

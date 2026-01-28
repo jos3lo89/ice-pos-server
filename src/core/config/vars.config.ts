@@ -8,4 +8,5 @@ export const varsSchema = Joi.object({
     .default('development'),
   CORS_ORIGINS: Joi.string().required(),
   API_PREFIX: Joi.string().required(),
+  JWT_SECRET: Joi.string().required(),
 });

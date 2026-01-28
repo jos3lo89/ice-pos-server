@@ -6,7 +6,6 @@ import { RolesGuard } from '../guards/roles.guard';
 export const ROLES_KEY = 'roles';
 
 export function Auth(...roles: Role[]) {
-  // Combinamos: Metadatos de roles + Guard de JWT + Guard de Roles
   return applyDecorators(
     SetMetadata(ROLES_KEY, roles),
     UseGuards(JwtAuthGuard, RolesGuard),
