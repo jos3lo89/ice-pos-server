@@ -1,9 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
-// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
-// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
-
 generator client {
   provider     = "prisma-client"
   output       = "../src/generated/prisma"
@@ -14,8 +8,306 @@ datasource db {
   provider = "postgresql"
 }
 
-model User {
-  id       Int    @id @default(autoincrement())
-  username String @unique
-  name     String
+model cash_sessions {
+  id                Int                  @id @default(autoincrement())
+  cajero_id         Int
+  opening_balance   Decimal              @default(0) @db.Decimal(10, 2)
+  expected_balance  Decimal?             @default(0) @db.Decimal(10, 2)
+  actual_balance    Decimal?             @default(0) @db.Decimal(10, 2)
+  difference        Decimal?             @default(0) @db.Decimal(10, 2)
+  status            cash_session_status? @default(abierta)
+  notes             String?
+  opened_at         DateTime?            @default(now()) @db.Timestamp(6)
+  closed_at         DateTime?            @db.Timestamp(6)
+  users             users                @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cash_transactions cash_transactions[]
+  payments          payments[]
+}
+
+model cash_transactions {
+  id              Int                   @id @default(autoincrement())
+  cash_session_id Int?
+  type            cash_transaction_type
+  amount          Decimal               @db.Decimal(10, 2)
+  description     String?
+  created_at      DateTime?             @default(now()) @db.Timestamp(6)
+  cash_sessions   cash_sessions?        @relation(fields: [cash_session_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+}
+
+model categories {
+  id          Int        @id @default(autoincrement())
+  name        String     @unique @db.VarChar(100)
+  description String?
+  is_active   Boolean    @default(true)
+  created_at  DateTime?  @default(now()) @db.Timestamp(6)
+  updated_at  DateTime?  @default(now()) @db.Timestamp(6)
+  products    products[]
+}
+
+model clients {
+  id               Int        @id @default(autoincrement())
+  tipo_documento   String     @db.VarChar(1)
+  numero_documento String     @unique @db.VarChar(15)
+  razon_social     String     @db.VarChar(255)
+  direccion        String?
+  ubigeo           String?    @db.VarChar(6)
+  departamento     String?    @db.VarChar(50)
+  provincia        String?    @db.VarChar(50)
+  distrito         String?    @db.VarChar(50)
+  email            String?    @db.VarChar(100)
+  created_at       DateTime?  @default(now()) @db.Timestamp(6)
+  updated_at       DateTime?  @default(now()) @db.Timestamp(6)
+  payments         payments[]
+}
+
+model order_item_modifiers {
+  order_item_id     Int
+  modifier_id       Int
+  modifier_name     String            @db.VarChar(100)
+  additional_price  Decimal           @default(0) @db.Decimal(10, 2)
+  product_modifiers product_modifiers @relation(fields: [modifier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  order_items       order_items       @relation(fields: [order_item_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([order_item_id, modifier_id])
+}
+
+model order_items {
+  id                   Int                    @id @default(autoincrement())
+  order_id             Int
+  product_id           Int
+  variant_id           Int?
+  quantity             Int                    @default(1)
+  unit_price           Decimal                @db.Decimal(10, 2)
+  modifiers_total      Decimal                @default(0) @db.Decimal(10, 2)
+  line_total           Decimal                @db.Decimal(10, 2)
+  status               order_status           @default(pendiente)
+  notes                String?
+  created_at           DateTime               @default(now()) @db.Timestamp(6)
+  updated_at           DateTime               @default(now()) @db.Timestamp(6)
+  order_item_modifiers order_item_modifiers[]
+  orders               orders                 @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products             products               @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  product_variants     product_variants?      @relation(fields: [variant_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payment_items        payment_items[]
+
+  @@index([order_id], map: "idx_order_items_order")
+  @@index([product_id], map: "idx_order_items_product")
+}
+
+model orders {
+  id                                     Int           @id @default(autoincrement())
+  order_number                           String        @unique @db.VarChar(20)
+  table_id                               Int?
+  mesero_id                              Int?
+  status                                 order_status  @default(pendiente)
+  order_type                             order_type    @default(en_local)
+  cancellation_reason                    String?
+  notes                                  String?
+  subtotal                               Decimal?      @default(0) @db.Decimal(10, 2)
+  igv                                    Decimal?      @default(0) @db.Decimal(10, 2)
+  total                                  Decimal?      @default(0) @db.Decimal(10, 2)
+  amount_paid                            Decimal?      @default(0) @db.Decimal(10, 2)
+  created_at                             DateTime?     @default(now()) @db.Timestamp(6)
+  updated_at                             DateTime?     @default(now()) @db.Timestamp(6)
+  completed_at                           DateTime?     @db.Timestamp(6)
+  order_items                            order_items[]
+  users                                  users?        @relation(fields: [mesero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  tables_orders_table_idTotables         tables?       @relation("orders_table_idTotables", fields: [table_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  payments                               payments[]
+  tables_tables_current_order_idToorders tables[]      @relation("tables_current_order_idToorders")
+
+  @@index([created_at], map: "idx_orders_created_at")
+  @@index([status], map: "idx_orders_status")
+  @@index([table_id], map: "idx_orders_table")
+}
+
+model payment_items {
+  payment_id    Int
+  order_item_id Int
+  paid_quantity Int         @default(1)
+  paid_amount   Decimal     @db.Decimal(10, 2)
+  order_items   order_items @relation(fields: [order_item_id], references: [id], onUpdate: NoAction)
+  payments      payments    @relation(fields: [payment_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([payment_id, order_item_id])
+}
+
+model payments {
+  id                 Int             @id @default(autoincrement())
+  payment_number     String          @unique @db.VarChar(20)
+  order_id           Int
+  cajero_id          Int?
+  client_id          Int?
+  amount             Decimal         @default(0) @db.Decimal(10, 2)
+  method             payment_method  @default(efectivo)
+  tipo_doc           doc_type        @default(ticket)
+  status             payment_status  @default(pendiente)
+  external_id        String?         @db.VarChar(100)
+  serie_comprobante  String?         @db.VarChar(4)
+  numero_comprobante String?         @db.VarChar(10)
+  pdf_url            String?
+  xml_url            String?
+  enviado_sunat      Boolean?        @default(false)
+  created_at         DateTime?       @default(now()) @db.Timestamp(6)
+  notes              String?
+  updated_at         DateTime?       @default(now()) @db.Timestamp(6)
+  cash_session_id    Int?
+  payment_items      payment_items[]
+  users              users?          @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  cash_sessions      cash_sessions?  @relation(fields: [cash_session_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clients            clients?        @relation(fields: [client_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orders             orders          @relation(fields: [order_id], references: [id], onUpdate: NoAction)
+
+  @@index([cash_session_id], map: "idx_payments_cash_session")
+  @@index([order_id], map: "idx_payments_order")
+  @@index([status], map: "idx_payments_status")
+}
+
+model product_modifiers {
+  id                   Int                    @id @default(autoincrement())
+  product_id           Int?
+  modifier_name        String                 @db.VarChar(100)
+  additional_price     Decimal                @default(0) @db.Decimal(10, 2)
+  order_item_modifiers order_item_modifiers[]
+  products             products?              @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([product_id, modifier_name], map: "uq_modifier")
+}
+
+model product_variants {
+  id               Int           @id @default(autoincrement())
+  product_id       Int?
+  variant_name     String        @db.VarChar(100)
+  additional_price Decimal       @default(0) @db.Decimal(10, 2)
+  order_items      order_items[]
+  products         products?     @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([product_id, variant_name], map: "uq_variant")
+}
+
+model products {
+  id                Int                 @id @default(autoincrement())
+  category_id       Int?
+  name              String              @db.VarChar(100)
+  description       String?
+  price             Decimal             @db.Decimal(10, 2)
+  area_impresion    printer_target
+  is_available      Boolean             @default(true)
+  codigo_sunat      String?             @db.VarChar(20)
+  unidad_medida     String?             @default("NIU") @db.VarChar(3)
+  afec_igv_tipo     String?             @default("10") @db.VarChar(2)
+  created_at        DateTime?           @default(now()) @db.Timestamp(6)
+  updated_at        DateTime?           @default(now()) @db.Timestamp(6)
+  order_items       order_items[]
+  product_modifiers product_modifiers[]
+  product_variants  product_variants[]
+  categories        categories?         @relation(fields: [category_id], references: [id], onUpdate: NoAction)
+
+  @@unique([category_id, name], map: "uq_products_name_cat")
+  @@index([category_id], map: "idx_products_category")
+}
+
+model settings {
+  id          Int       @id @default(autoincrement())
+  key         String    @unique @db.VarChar(100)
+  value       String?
+  description String?
+  created_at  DateTime? @default(now()) @db.Timestamp(6)
+  updated_at  DateTime? @default(now()) @db.Timestamp(6)
+}
+
+model tables {
+  id                                     Int          @id @default(autoincrement())
+  table_number                           String       @unique @db.VarChar(20)
+  floor                                  Int
+  status                                 table_status @default(disponible)
+  reserved_for                           String?      @db.VarChar(100)
+  current_order_id                       Int?
+  created_at                             DateTime?    @default(now()) @db.Timestamp(6)
+  updated_at                             DateTime?    @default(now()) @db.Timestamp(6)
+  orders_orders_table_idTotables         orders[]     @relation("orders_table_idTotables")
+  orders_tables_current_order_idToorders orders?      @relation("tables_current_order_idToorders", fields: [current_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_current_order")
+
+  @@index([status], map: "idx_tables_status")
+}
+
+model users {
+  id            Int             @id @default(autoincrement())
+  username      String          @unique @db.VarChar(50)
+  password      String
+  pin           String?         @db.VarChar(6)
+  full_name     String          @db.VarChar(100)
+  role          user_role       @default(mesero)
+  is_active     Boolean         @default(true)
+  phone         String?         @unique @db.VarChar(20)
+  created_at    DateTime        @default(now()) @db.Timestamp(6)
+  updated_at    DateTime        @default(now()) @db.Timestamp(6)
+  cash_sessions cash_sessions[]
+  orders        orders[]
+  payments      payments[]
+
+  @@index([role], map: "idx_users_role")
+}
+
+enum cash_session_status {
+  abierta
+  cerrada
+}
+
+enum cash_transaction_type {
+  ingreso
+  egreso
+}
+
+enum doc_type {
+  ticket
+  boleta
+  factura
+}
+
+enum order_status {
+  pendiente
+  preparando
+  listo
+  servido
+  completado
+  cancelado
+}
+
+enum order_type {
+  en_local
+  para_llevar
+}
+
+enum payment_method {
+  efectivo
+  tarjeta
+  yape
+  plin
+}
+
+enum payment_status {
+  pendiente
+  pagado
+  cancelado
+}
+
+enum printer_target {
+  cocina
+  bar
+}
+
+enum table_status {
+  disponible
+  ocupada
+  reservada
+  limpieza
+}
+
+enum user_role {
+  admin
+  mesero
+  cajero
+  cocinero
+  bartender
 }

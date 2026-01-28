@@ -49,4 +49,8 @@ async function bootstrap() {
     `🚀 Application is running on: ${await app.getUrl()}, NODE_ENV: ${nodeEnv},`,
   );
 }
-bootstrap();
+
+bootstrap().catch((err) => {
+  console.error(err);
+  process.exit(1);
+});
