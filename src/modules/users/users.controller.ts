@@ -7,11 +7,10 @@ import { Controller, Get } from '@nestjs/common';
 @Controller('users')
 export class UsersController {
   @Get('profile')
-  @Auth(Role.ADMIN, Role.CAJERO) // 1. Protege ruta y valida Roles
-  getProfile(@CurrentUser() user: CurrentUserInterface) {
-    // 2. Obtiene usuario del JWT
+  @Auth(Role.ADMIN)
+  async getProfile(@CurrentUser() user: CurrentUserInterface) {
     console.log(user);
-    // user = { id: 1, email: '...', roles: ['ADMIN'] }
+
     return user;
   }
 }

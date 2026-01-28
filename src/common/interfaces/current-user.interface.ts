@@ -2,6 +2,8 @@ import { Role } from '../enums/role.enum';
 
 export interface CurrentUserInterface {
   id: number;
-  email: string;
-  roles: Role[];
+  userName: string;
+  role: Role;
+  iat: number;
+  exp: number;
 }

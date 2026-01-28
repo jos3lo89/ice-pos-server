@@ -8,7 +8,6 @@ import {
 import { Reflector } from '@nestjs/core';
 import { Role } from '../enums/role.enum';
 import { ROLES_KEY } from '../decorators/auth.decorator';
-import { CurrentUserInterface } from '../interfaces/current-user.interface';
 
 @Injectable()
 export class RolesGuard implements CanActivate {
@@ -20,12 +19,11 @@ export class RolesGuard implements CanActivate {
       context.getClass(),
     ]);
 
-    if (!requiredRoles) return true; // Si no hay roles requeridos, pasa
+    if (!requiredRoles) return true;
 
     const { user } = context.switchToHttp().getRequest();
-    if (!user) throw new ForbiddenException('User not found');
+    if (!user) throw new ForbiddenException('usuario no encontrado');
 
-    // Verifica si el usuario tiene al menos uno de los roles requeridos
-    return requiredRoles.some((role) => user.roles?.includes(role));
+    return requiredRoles.some((role) => user.role?.includes(role));
   }
 }
