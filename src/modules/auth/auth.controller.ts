@@ -11,7 +11,6 @@ import { type Response } from 'express';
 import { LoginDto } from './dto/login-dto';
 import { ConfigService } from '@nestjs/config';
 import { Auth } from '@/common/decorators/auth.decorator';
-import { Role } from '@/common/enums/role.enum';
 
 @Controller('auth')
 export class AuthController {
@@ -43,7 +42,7 @@ export class AuthController {
   }
 
   @Post('logout')
-  @Auth(Role.ADMIN)
+  @Auth()
   @HttpCode(HttpStatus.OK)
   async logout(@Res({ passthrough: true }) res: Response) {
     const isProd = this.configService.get<string>('NODE_ENV') === 'production';
