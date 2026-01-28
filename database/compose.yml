@@ -3,13 +3,34 @@ services:
     image: postgres:15-alpine
     container_name: pg15
     ports:
-      - "5432:5432"
+      - '6000:5432'
     environment:
       POSTGRES_USER: rem
       POSTGRES_PASSWORD: rem123
       POSTGRES_DB: icedb
     volumes:
       - pg_data:/var/lib/postgresql/data
+    networks:
+      - pg-network
+
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: haru@rem.com
+      PGADMIN_DEFAULT_PASSWORD: rem123
+    ports:
+      - '6001:80' # http://localhost:6001
+    volumes:
+      - pgadmin_data:/var/lib/pgadmin
+    depends_on:
+      - db
+    networks:
+      - pg-network
 
 volumes:
   pg_data:
+  pgadmin_data:
+
+networks:
+  pg-network:

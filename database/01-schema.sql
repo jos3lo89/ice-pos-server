@@ -66,7 +66,7 @@ CREATE TABLE tables
 (
     id               SERIAL PRIMARY KEY,
     table_number     VARCHAR(20)  NOT NULL UNIQUE,
-    floor            INTEGER      NOT NULL CHECK (floor BETWEEN 1 AND 3),
+    floor            INTEGER      NOT NULL,
     status           table_status NOT NULL DEFAULT 'disponible',
     reserved_for     VARCHAR(100),
     current_order_id INTEGER,
@@ -91,7 +91,7 @@ CREATE TABLE categories
 CREATE TABLE products
 (
     id             SERIAL PRIMARY KEY,
-    category_id    INTEGER REFERENCES categories (id),
+    category_id    INTEGER REFERENCES categories(id) ON DELETE SET NULL,
     name           VARCHAR(100)   NOT NULL,
     description    TEXT,
     price          DECIMAL(10, 2) NOT NULL,
@@ -101,7 +101,8 @@ CREATE TABLE products
     unidad_medida  VARCHAR(3)              DEFAULT 'NIU', -- 'NIU' para platos/bebidas, 'ZZ' para servicios
     afec_igv_tipo  VARCHAR(2)              DEFAULT '10',  -- '10' es Gravado (operación normal)
     created_at     TIMESTAMP               DEFAULT NOW(),
-    updated_at     TIMESTAMP               DEFAULT NOW()
+    updated_at     TIMESTAMP               DEFAULT NOW(),
+    CONSTRAINT uq_products_name_cat UNIQUE (category_id, name)
 );
 
 CREATE TABLE product_variants
@@ -157,7 +158,7 @@ CREATE TABLE order_items
     order_id        INTEGER        NOT NULL REFERENCES orders (id) ON DELETE CASCADE,
     product_id      INTEGER        NOT NULL REFERENCES products (id),
     variant_id      INTEGER REFERENCES product_variants (id),
-    quantity        INTEGER        NOT NULL DEFAULT 1 CHECK (quantity > 0),
+    quantity        INTEGER        NOT NULL DEFAULT 1,
     unit_price      DECIMAL(10, 2) NOT NULL, -- price base + variant al momento
     modifiers_total DECIMAL(10, 2) NOT NULL DEFAULT 0,
     line_total      DECIMAL(10, 2) NOT NULL, -- (unit_price + modifiers_total)*quantity
@@ -224,7 +225,7 @@ CREATE TABLE payment_items
 (
     payment_id    INTEGER        NOT NULL REFERENCES payments (id) ON DELETE CASCADE,
     order_item_id INTEGER        NOT NULL REFERENCES order_items (id) ON DELETE RESTRICT,
-    paid_quantity INTEGER        NOT NULL DEFAULT 1 CHECK (paid_quantity > 0),
+    paid_quantity INTEGER        NOT NULL DEFAULT 1,
     paid_amount   DECIMAL(10, 2) NOT NULL,
     PRIMARY KEY (payment_id, order_item_id)
 );
