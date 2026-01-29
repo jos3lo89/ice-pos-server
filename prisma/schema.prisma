@@ -235,11 +235,10 @@ model users {
   id            Int             @id @default(autoincrement())
   username      String          @unique @db.VarChar(50)
   password      String
-  pin           String?
   full_name     String          @db.VarChar(100)
   role          user_role       @default(mesero)
   is_active     Boolean         @default(true)
-  phone         String?         @unique @db.VarChar(20)
+  phone         String          @unique @db.VarChar(9)
   created_at    DateTime        @default(now())
   updated_at    DateTime        @updatedAt
   cash_sessions cash_sessions[]

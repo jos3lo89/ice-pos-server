@@ -25,11 +25,6 @@ export class CreateUserDto {
   @MinLength(6, { message: 'La contraseña debe tener al menos 6 caracteres.' })
   password: string;
 
-  @IsOptional()
-  @IsString()
-  @MaxLength(6, { message: 'El PIN no puede tener más de 6 dígitos.' })
-  pin?: string;
-
   @IsString({ message: 'El nombre completo debe ser un texto.' })
   @IsNotEmpty({ message: 'El nombre completo es obligatorio.' })
   @MinLength(3, {
@@ -51,6 +46,5 @@ export class CreateUserDto {
 
   @IsString({ message: 'El teléfono debe ser un texto.' })
   @MaxLength(9, { message: 'El teléfono debe tener 9 dígitos.' })
-  @IsOptional()
-  phone?: string;
+  phone: string;
 }

@@ -69,6 +69,29 @@ const usersData = [
   },
 ];
 
+const categories = [
+  {
+    name: 'Bebidas',
+    description: 'Refrescos, jugos, cervezas y bebidas alcohólicas',
+  },
+  {
+    name: 'Entradas',
+    description: 'Porciones para compartir y aperitivos',
+  },
+  {
+    name: 'Platos Fuertes',
+    description: 'Platos principales del restaurante',
+  },
+  {
+    name: 'Postres',
+    description: 'Dulces y helados para terminar la comida',
+  },
+  {
+    name: 'Extras',
+    description: 'Papas fritas, salsas y acompañamientos',
+  },
+];
+
 async function main() {
   console.log('... Iniciando seed');
 
@@ -109,7 +132,6 @@ async function main() {
         create: {
           username: user.username,
           password: bcryptjs.hashSync(user.password, salt),
-          pin: bcryptjs.hashSync(user.password, salt),
           full_name: user.full_name,
           role: user.role,
           phone: user.phone,
@@ -137,6 +159,27 @@ async function main() {
   });
 
   console.log('✅ Cliente por defecto listo');
+
+  /* ===============================
+     ✅ 4. CATEGORIES
+  =============================== */
+
+  await prisma.$transaction(
+    categories.map((cat) =>
+      prisma.categories.upsert({
+        where: { name: cat.name },
+        update: {
+          description: cat.description,
+        },
+        create: {
+          description: cat.description,
+          name: cat.name,
+        },
+      }),
+    ),
+  );
+
+  console.log('✅ Categorias listo');
 
   console.log('... Seed finalizado ✅');
 }

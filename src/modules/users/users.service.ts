@@ -7,6 +7,7 @@ import {
 } from '@nestjs/common';
 import { CreateUserDto } from './dto/create-user.dto';
 import bcryptjs from 'bcryptjs';
+import { ChangeUserStateDto } from './dto/change-state.dto';
 
 @Injectable()
 export class UsersService {
@@ -30,7 +31,6 @@ export class UsersService {
       where: { id: userId },
       omit: {
         password: true,
-        pin: true,
       },
     });
 
@@ -62,18 +62,14 @@ export class UsersService {
 
       const salt = await bcryptjs.genSalt(10);
       const hashedPassword = await bcryptjs.hash(data.password, salt);
-      const hashedPin = data.pin ? await bcryptjs.hash(data.pin, salt) : null;
 
       const newUser = await this.prisma.users.create({
         data: {
           ...data,
-          phone: data.phone || null,
           password: hashedPassword,
-          pin: hashedPin,
         },
         omit: {
           password: true,
-          pin: true,
         },
       });
 
@@ -90,10 +86,25 @@ export class UsersService {
     const users = await this.prisma.users.findMany({
       omit: {
         password: true,
-        pin: true,
       },
     });
 
     return users;
+  }
+
+  async changeUserState(userId: number, values: ChangeUserStateDto) {
+    const newUser = await this.prisma.users.update({
+      where: {
+        id: userId,
+      },
+      data: {
+        is_active: values.is_active,
+      },
+      omit: {
+        password: true,
+      },
+    });
+
+    return newUser;
   }
 }
