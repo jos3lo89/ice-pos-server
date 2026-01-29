@@ -5,7 +5,6 @@ import {
   IsNotEmpty,
   IsOptional,
   IsString,
-  Matches,
   MaxLength,
   MinLength,
 } from 'class-validator';
@@ -27,11 +26,9 @@ export class CreateUserDto {
   password: string;
 
   @IsOptional()
-  @IsString({ message: 'El PIN debe ser un texto.' })
-  @Matches(/^[0-9]+$/, { message: 'El PIN solo debe contener números.' })
-  @MinLength(4, { message: 'El PIN debe tener al menos 4 dígitos.' })
+  @IsString()
   @MaxLength(6, { message: 'El PIN no puede tener más de 6 dígitos.' })
-  pin: string;
+  pin?: string;
 
   @IsString({ message: 'El nombre completo debe ser un texto.' })
   @IsNotEmpty({ message: 'El nombre completo es obligatorio.' })
@@ -53,7 +50,7 @@ export class CreateUserDto {
   is_active: boolean;
 
   @IsString({ message: 'El teléfono debe ser un texto.' })
-  @IsNotEmpty({ message: 'El teléfono es obligatorio.' })
-  @MinLength(9, { message: 'El teléfono debe tener al menos 9 dígitos.' })
-  phone: string;
+  @MaxLength(9, { message: 'El teléfono debe tener 9 dígitos.' })
+  @IsOptional()
+  phone?: string;
 }

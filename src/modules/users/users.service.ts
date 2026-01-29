@@ -43,23 +43,31 @@ export class UsersService {
 
   async createUser(data: CreateUserDto) {
     try {
-      const userFound = await this.prisma.users.findFirst({
-        where: {
-          OR: [{ username: data.username }, { phone: data.phone }],
-        },
+      const userByUsername = await this.prisma.users.findUnique({
+        where: { username: data.username },
       });
 
-      if (userFound) {
-        throw new ConflictException('Usuario o teléfono ya existe');
+      if (userByUsername) {
+        throw new ConflictException('Nombre de usuario ya existe');
+      }
+
+      if (data.phone) {
+        const userByPhone = await this.prisma.users.findUnique({
+          where: { phone: data.phone },
+        });
+        if (userByPhone) {
+          throw new ConflictException('Teléfono ya existe');
+        }
       }
 
       const salt = await bcryptjs.genSalt(10);
       const hashedPassword = await bcryptjs.hash(data.password, salt);
-      const hashedPin = await bcryptjs.hash(data.pin, salt);
+      const hashedPin = data.pin ? await bcryptjs.hash(data.pin, salt) : null;
 
       const newUser = await this.prisma.users.create({
         data: {
           ...data,
+          phone: data.phone || null,
           password: hashedPassword,
           pin: hashedPin,
         },
@@ -76,5 +84,16 @@ export class UsersService {
       );
       throw error;
     }
+  }
+
+  async getAllUsers() {
+    const users = await this.prisma.users.findMany({
+      omit: {
+        password: true,
+        pin: true,
+      },
+    });
+
+    return users;
   }
 }
