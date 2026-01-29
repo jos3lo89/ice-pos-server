@@ -17,8 +17,8 @@ model cash_sessions {
   difference        Decimal?             @default(0) @db.Decimal(10, 2)
   status            cash_session_status? @default(abierta)
   notes             String?
-  opened_at         DateTime?            @default(now()) @db.Timestamp(6)
-  closed_at         DateTime?            @db.Timestamp(6)
+  opened_at         DateTime             @default(now())
+  closed_at         DateTime?
   users             users                @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   cash_transactions cash_transactions[]
   payments          payments[]
@@ -30,7 +30,7 @@ model cash_transactions {
   type            cash_transaction_type
   amount          Decimal               @db.Decimal(10, 2)
   description     String?
-  created_at      DateTime?             @default(now()) @db.Timestamp(6)
+  created_at      DateTime              @default(now())
   cash_sessions   cash_sessions?        @relation(fields: [cash_session_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
@@ -39,8 +39,8 @@ model categories {
   name        String     @unique @db.VarChar(100)
   description String?
   is_active   Boolean    @default(true)
-  created_at  DateTime?  @default(now()) @db.Timestamp(6)
-  updated_at  DateTime?  @default(now()) @db.Timestamp(6)
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
   products    products[]
 }
 
@@ -55,8 +55,8 @@ model clients {
   provincia        String?    @db.VarChar(50)
   distrito         String?    @db.VarChar(50)
   email            String?    @db.VarChar(100)
-  created_at       DateTime?  @default(now()) @db.Timestamp(6)
-  updated_at       DateTime?  @default(now()) @db.Timestamp(6)
+  created_at       DateTime   @default(now())
+  updated_at       DateTime   @updatedAt
   payments         payments[]
 }
 
@@ -82,8 +82,8 @@ model order_items {
   line_total           Decimal                @db.Decimal(10, 2)
   status               order_status           @default(pendiente)
   notes                String?
-  created_at           DateTime               @default(now()) @db.Timestamp(6)
-  updated_at           DateTime               @default(now()) @db.Timestamp(6)
+  created_at           DateTime               @default(now())
+  updated_at           DateTime               @updatedAt
   order_item_modifiers order_item_modifiers[]
   orders               orders                 @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   products             products               @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -107,9 +107,9 @@ model orders {
   igv                                    Decimal?      @default(0) @db.Decimal(10, 2)
   total                                  Decimal?      @default(0) @db.Decimal(10, 2)
   amount_paid                            Decimal?      @default(0) @db.Decimal(10, 2)
-  created_at                             DateTime?     @default(now()) @db.Timestamp(6)
-  updated_at                             DateTime?     @default(now()) @db.Timestamp(6)
-  completed_at                           DateTime?     @db.Timestamp(6)
+  created_at                             DateTime      @default(now())
+  updated_at                             DateTime      @updatedAt
+  completed_at                           DateTime?
   order_items                            order_items[]
   users                                  users?        @relation(fields: [mesero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tables_orders_table_idTotables         tables?       @relation("orders_table_idTotables", fields: [table_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -148,9 +148,9 @@ model payments {
   pdf_url            String?
   xml_url            String?
   enviado_sunat      Boolean?        @default(false)
-  created_at         DateTime?       @default(now()) @db.Timestamp(6)
+  created_at         DateTime        @default(now())
   notes              String?
-  updated_at         DateTime?       @default(now()) @db.Timestamp(6)
+  updated_at         DateTime        @updatedAt
   cash_session_id    Int?
   payment_items      payment_items[]
   users              users?          @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -196,8 +196,8 @@ model products {
   codigo_sunat      String?             @db.VarChar(20)
   unidad_medida     String?             @default("NIU") @db.VarChar(3)
   afec_igv_tipo     String?             @default("10") @db.VarChar(2)
-  created_at        DateTime?           @default(now()) @db.Timestamp(6)
-  updated_at        DateTime?           @default(now()) @db.Timestamp(6)
+  created_at        DateTime            @default(now())
+  updated_at        DateTime            @updatedAt
   order_items       order_items[]
   product_modifiers product_modifiers[]
   product_variants  product_variants[]
@@ -208,12 +208,12 @@ model products {
 }
 
 model settings {
-  id          Int       @id @default(autoincrement())
-  key         String    @unique @db.VarChar(100)
+  id          Int      @id @default(autoincrement())
+  key         String   @unique @db.VarChar(100)
   value       String?
   description String?
-  created_at  DateTime? @default(now()) @db.Timestamp(6)
-  updated_at  DateTime? @default(now()) @db.Timestamp(6)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
 }
 
 model tables {
@@ -223,8 +223,8 @@ model tables {
   status                                 table_status @default(disponible)
   reserved_for                           String?      @db.VarChar(100)
   current_order_id                       Int?
-  created_at                             DateTime?    @default(now()) @db.Timestamp(6)
-  updated_at                             DateTime?    @default(now()) @db.Timestamp(6)
+  created_at                             DateTime     @default(now())
+  updated_at                             DateTime     @updatedAt
   orders_orders_table_idTotables         orders[]     @relation("orders_table_idTotables")
   orders_tables_current_order_idToorders orders?      @relation("tables_current_order_idToorders", fields: [current_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_current_order")
 
@@ -235,13 +235,13 @@ model users {
   id            Int             @id @default(autoincrement())
   username      String          @unique @db.VarChar(50)
   password      String
-  pin           String?         @db.VarChar(6)
+  pin           String?
   full_name     String          @db.VarChar(100)
   role          user_role       @default(mesero)
   is_active     Boolean         @default(true)
   phone         String?         @unique @db.VarChar(20)
-  created_at    DateTime        @default(now()) @db.Timestamp(6)
-  updated_at    DateTime        @default(now()) @db.Timestamp(6)
+  created_at    DateTime        @default(now())
+  updated_at    DateTime        @updatedAt
   cash_sessions cash_sessions[]
   orders        orders[]
   payments      payments[]

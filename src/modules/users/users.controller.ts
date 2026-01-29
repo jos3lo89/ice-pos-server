@@ -1,15 +1,22 @@
 import { Auth } from '@/common/decorators/auth.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { type CurrentUserI } from '@/common/interfaces/current-user.interface';
-import { Controller, Get } from '@nestjs/common';
+import { Body, Controller, Get, Post } from '@nestjs/common';
+import { UsersService } from './users.service';
+import { CreateUserDto } from './dto/create-user.dto';
 
 @Controller('users')
 export class UsersController {
+  constructor(private readonly usersService: UsersService) {}
+
   @Get('profile')
   @Auth()
-  async getProfile(@CurrentUser() user: CurrentUserI) {
-    console.log(user);
+  getProfile(@CurrentUser() user: CurrentUserI) {
+    return this.usersService.getProfile(user.id);
+  }
 
-    return user;
+  @Post()
+  createUser(@Body() body: CreateUserDto) {
+    return this.usersService.createUser(body);
   }
 }
