@@ -4,16 +4,19 @@ import {
   Injectable,
   InternalServerErrorException,
   Logger,
+  NotFoundException,
 } from '@nestjs/common';
 import { FindCategoryQueryDto } from './dto/find-category-query.dto';
 import { Prisma } from '@/generated/prisma/client';
 import { CreateCategoryDto } from './dto/create-category.dto';
+import { UpdateCategoryStatusDto } from './dto/update-category-status.dto';
 
 @Injectable()
 export class CategoriesService {
   private readonly logger = new Logger(CategoriesService.name);
 
   constructor(private readonly prisma: PrismaService) {}
+
   async getAllCategories(query: FindCategoryQueryDto) {
     const { page = 1, limit = 5, search } = query;
     const skip = (page - 1) * limit;
@@ -83,6 +86,43 @@ export class CategoriesService {
 
       throw new InternalServerErrorException(
         'Error interno al crear categoria',
+      );
+    }
+  }
+
+  async toggleCategoryStatus(dto: UpdateCategoryStatusDto, id: string) {
+    const catFound = await this.prisma.categories.findUnique({
+      where: {
+        id,
+      },
+    });
+
+    if (!catFound) {
+      throw new NotFoundException('Categoria no encontrada');
+    }
+
+    try {
+      const updateCat = await this.prisma.categories.update({
+        where: {
+          id,
+        },
+        data: {
+          is_active: dto.is_active,
+        },
+        include: {
+          _count: {
+            select: {
+              products: true,
+            },
+          },
+        },
+      });
+
+      return updateCat;
+    } catch (error) {
+      this.logger.error(`Error al actualizar categoria con ID: ${id}`);
+      throw new InternalServerErrorException(
+        'Error interno al actualizar stado de la categoria',
       );
     }
   }
