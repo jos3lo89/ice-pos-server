@@ -14,19 +14,7 @@ export class UsersService {
   private readonly logger = new Logger(UsersService.name);
   constructor(private readonly prisma: PrismaService) {}
 
-  async findOne(userName: string) {
-    const user = await this.prisma.users.findUnique({
-      where: { username: userName },
-    });
-
-    if (!user) {
-      throw new NotFoundException('Usuario no encontrado');
-    }
-
-    return user;
-  }
-
-  async getProfile(userId: number) {
+  async getProfile(userId: string) {
     const user = await this.prisma.users.findUnique({
       where: { id: userId },
       omit: {
@@ -92,7 +80,7 @@ export class UsersService {
     return users;
   }
 
-  async changeUserState(userId: number, values: ChangeUserStateDto) {
+  async changeUserState(userId: string, values: ChangeUserStateDto) {
     const newUser = await this.prisma.users.update({
       where: {
         id: userId,

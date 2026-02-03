@@ -9,33 +9,33 @@ datasource db {
 }
 
 model cash_sessions {
-  id                Int                  @id @default(autoincrement())
-  cajero_id         Int
-  opening_balance   Decimal              @default(0) @db.Decimal(10, 2)
-  expected_balance  Decimal?             @default(0) @db.Decimal(10, 2)
-  actual_balance    Decimal?             @default(0) @db.Decimal(10, 2)
-  difference        Decimal?             @default(0) @db.Decimal(10, 2)
-  status            cash_session_status? @default(abierta)
+  id                String              @id @default(uuid())
+  cajero_id         String
+  opening_balance   Decimal             @default(0) @db.Decimal(10, 2)
+  expected_balance  Decimal?            @default(0) @db.Decimal(10, 2)
+  actual_balance    Decimal?            @default(0) @db.Decimal(10, 2)
+  difference        Decimal?            @default(0) @db.Decimal(10, 2)
+  status            CashSessionStatus?  @default(abierta)
   notes             String?
-  opened_at         DateTime             @default(now())
+  opened_at         DateTime            @default(now())
   closed_at         DateTime?
-  users             users                @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users             users               @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   cash_transactions cash_transactions[]
   payments          payments[]
 }
 
 model cash_transactions {
-  id              Int                   @id @default(autoincrement())
-  cash_session_id Int?
-  type            cash_transaction_type
-  amount          Decimal               @db.Decimal(10, 2)
+  id              String              @id @default(uuid())
+  cash_session_id String?
+  type            CashTransactionType
+  amount          Decimal             @db.Decimal(10, 2)
   description     String?
-  created_at      DateTime              @default(now())
-  cash_sessions   cash_sessions?        @relation(fields: [cash_session_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  created_at      DateTime            @default(now())
+  cash_sessions   cash_sessions?      @relation(fields: [cash_session_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model categories {
-  id          Int        @id @default(autoincrement())
+  id          String     @id @default(uuid())
   name        String     @unique @db.VarChar(100)
   description String?
   is_active   Boolean    @default(true)
@@ -45,7 +45,7 @@ model categories {
 }
 
 model clients {
-  id               Int        @id @default(autoincrement())
+  id               String     @id @default(uuid())
   tipo_documento   String     @db.VarChar(1)
   numero_documento String     @unique @db.VarChar(15)
   razon_social     String     @db.VarChar(255)
@@ -61,8 +61,8 @@ model clients {
 }
 
 model order_item_modifiers {
-  order_item_id     Int
-  modifier_id       Int
+  order_item_id     String
+  modifier_id       String
   modifier_name     String            @db.VarChar(100)
   additional_price  Decimal           @default(0) @db.Decimal(10, 2)
   product_modifiers product_modifiers @relation(fields: [modifier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -72,15 +72,15 @@ model order_item_modifiers {
 }
 
 model order_items {
-  id                   Int                    @id @default(autoincrement())
-  order_id             Int
-  product_id           Int
-  variant_id           Int?
+  id                   String                 @id @default(uuid())
+  order_id             String
+  product_id           String
+  variant_id           String?
   quantity             Int                    @default(1)
   unit_price           Decimal                @db.Decimal(10, 2)
   modifiers_total      Decimal                @default(0) @db.Decimal(10, 2)
   line_total           Decimal                @db.Decimal(10, 2)
-  status               order_status           @default(pendiente)
+  status               OrderStatus            @default(pendiente)
   notes                String?
   created_at           DateTime               @default(now())
   updated_at           DateTime               @updatedAt
@@ -95,12 +95,12 @@ model order_items {
 }
 
 model orders {
-  id                                     Int           @id @default(autoincrement())
+  id                                     String        @id @default(uuid())
   order_number                           String        @unique @db.VarChar(20)
-  table_id                               Int?
-  mesero_id                              Int?
-  status                                 order_status  @default(pendiente)
-  order_type                             order_type    @default(en_local)
+  table_id                               String?
+  mesero_id                              String?
+  status                                 OrderStatus   @default(pendiente)
+  order_type                             OrderType     @default(en_local)
   cancellation_reason                    String?
   notes                                  String?
   subtotal                               Decimal?      @default(0) @db.Decimal(10, 2)
@@ -122,8 +122,8 @@ model orders {
 }
 
 model payment_items {
-  payment_id    Int
-  order_item_id Int
+  payment_id    String
+  order_item_id String
   paid_quantity Int         @default(1)
   paid_amount   Decimal     @db.Decimal(10, 2)
   order_items   order_items @relation(fields: [order_item_id], references: [id], onUpdate: NoAction)
@@ -133,15 +133,15 @@ model payment_items {
 }
 
 model payments {
-  id                 Int             @id @default(autoincrement())
+  id                 String          @id @default(uuid())
   payment_number     String          @unique @db.VarChar(20)
-  order_id           Int
-  cajero_id          Int?
-  client_id          Int?
+  order_id           String
+  cajero_id          String?
+  client_id          String?
   amount             Decimal         @default(0) @db.Decimal(10, 2)
-  method             payment_method  @default(efectivo)
-  tipo_doc           doc_type        @default(ticket)
-  status             payment_status  @default(pendiente)
+  method             PaymentMethod   @default(efectivo)
+  tipo_doc           DocType         @default(ticket)
+  status             PaymentStatus   @default(pendiente)
   external_id        String?         @db.VarChar(100)
   serie_comprobante  String?         @db.VarChar(4)
   numero_comprobante String?         @db.VarChar(10)
@@ -151,7 +151,7 @@ model payments {
   created_at         DateTime        @default(now())
   notes              String?
   updated_at         DateTime        @updatedAt
-  cash_session_id    Int?
+  cash_session_id    String?
   payment_items      payment_items[]
   users              users?          @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   cash_sessions      cash_sessions?  @relation(fields: [cash_session_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -164,8 +164,8 @@ model payments {
 }
 
 model product_modifiers {
-  id                   Int                    @id @default(autoincrement())
-  product_id           Int?
+  id                   String                 @id @default(uuid())
+  product_id           String?
   modifier_name        String                 @db.VarChar(100)
   additional_price     Decimal                @default(0) @db.Decimal(10, 2)
   order_item_modifiers order_item_modifiers[]
@@ -175,8 +175,8 @@ model product_modifiers {
 }
 
 model product_variants {
-  id               Int           @id @default(autoincrement())
-  product_id       Int?
+  id               String        @id @default(uuid())
+  product_id       String?
   variant_name     String        @db.VarChar(100)
   additional_price Decimal       @default(0) @db.Decimal(10, 2)
   order_items      order_items[]
@@ -186,12 +186,12 @@ model product_variants {
 }
 
 model products {
-  id                Int                 @id @default(autoincrement())
-  category_id       Int?
+  id                String              @id @default(uuid())
+  category_id       String?
   name              String              @db.VarChar(100)
   description       String?
   price             Decimal             @db.Decimal(10, 2)
-  area_impresion    printer_target
+  area_impresion    PrinterTarget
   is_available      Boolean             @default(true)
   codigo_sunat      String?             @db.VarChar(20)
   unidad_medida     String?             @default("NIU") @db.VarChar(3)
@@ -208,7 +208,7 @@ model products {
 }
 
 model settings {
-  id          Int      @id @default(autoincrement())
+  id          String   @id @default(uuid())
   key         String   @unique @db.VarChar(100)
   value       String?
   description String?
@@ -217,26 +217,26 @@ model settings {
 }
 
 model tables {
-  id                                     Int          @id @default(autoincrement())
-  table_number                           String       @unique @db.VarChar(20)
+  id                                     String      @id @default(uuid())
+  table_number                           String      @unique @db.VarChar(20)
   floor                                  Int
-  status                                 table_status @default(disponible)
-  reserved_for                           String?      @db.VarChar(100)
-  current_order_id                       Int?
-  created_at                             DateTime     @default(now())
-  updated_at                             DateTime     @updatedAt
-  orders_orders_table_idTotables         orders[]     @relation("orders_table_idTotables")
-  orders_tables_current_order_idToorders orders?      @relation("tables_current_order_idToorders", fields: [current_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_current_order")
+  status                                 TableStatus @default(disponible)
+  reserved_for                           String?     @db.VarChar(100)
+  current_order_id                       String?
+  created_at                             DateTime    @default(now())
+  updated_at                             DateTime    @updatedAt
+  orders_orders_table_idTotables         orders[]    @relation("orders_table_idTotables")
+  orders_tables_current_order_idToorders orders?     @relation("tables_current_order_idToorders", fields: [current_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_current_order")
 
   @@index([status], map: "idx_tables_status")
 }
 
 model users {
-  id            Int             @id @default(autoincrement())
+  id            String          @id @default(uuid())
   username      String          @unique @db.VarChar(50)
   password      String
   full_name     String          @db.VarChar(100)
-  role          user_role       @default(mesero)
+  role          UserRole        @default(mesero)
   is_active     Boolean         @default(true)
   phone         String          @unique @db.VarChar(9)
   created_at    DateTime        @default(now())
@@ -248,23 +248,23 @@ model users {
   @@index([role], map: "idx_users_role")
 }
 
-enum cash_session_status {
+enum CashSessionStatus {
   abierta
   cerrada
 }
 
-enum cash_transaction_type {
+enum CashTransactionType {
   ingreso
   egreso
 }
 
-enum doc_type {
+enum DocType {
   ticket
   boleta
   factura
 }
 
-enum order_status {
+enum OrderStatus {
   pendiente
   preparando
   listo
@@ -273,37 +273,37 @@ enum order_status {
   cancelado
 }
 
-enum order_type {
+enum OrderType {
   en_local
   para_llevar
 }
 
-enum payment_method {
+enum PaymentMethod {
   efectivo
   tarjeta
   yape
   plin
 }
 
-enum payment_status {
+enum PaymentStatus {
   pendiente
   pagado
   cancelado
 }
 
-enum printer_target {
+enum PrinterTarget {
   cocina
   bar
 }
 
-enum table_status {
+enum TableStatus {
   disponible
   ocupada
   reservada
   limpieza
 }
 
-enum user_role {
+enum UserRole {
   admin
   mesero
   cajero

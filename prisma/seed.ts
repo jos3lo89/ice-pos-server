@@ -1,4 +1,4 @@
-import { PrismaClient, user_role } from '../src/generated/prisma/client';
+import { PrismaClient, UserRole } from '../src/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { config } from 'dotenv';
 import bcryptjs from 'bcryptjs';
@@ -36,35 +36,35 @@ const usersData = [
     username: 'admin',
     password: '111111',
     full_name: 'Administrador General',
-    role: user_role.admin,
+    role: UserRole.admin,
     phone: '111111111',
   },
   {
     username: 'juan_mesero',
     password: '222222',
     full_name: 'Juan Pérez',
-    role: user_role.mesero,
+    role: UserRole.mesero,
     phone: '222222222',
   },
   {
     username: 'ana_cajera',
     password: '333333',
     full_name: 'Ana García',
-    role: user_role.cajero,
+    role: UserRole.cajero,
     phone: '333333333',
   },
   {
     username: 'chef_mario',
     password: '444444',
     full_name: 'Mario Gastón',
-    role: user_role.cocinero,
+    role: UserRole.cocinero,
     phone: '444444444',
   },
   {
     username: 'luis_barman',
     password: '555555',
     full_name: 'Luis Tragos',
-    role: user_role.bartender,
+    role: UserRole.bartender,
     phone: '555555555',
   },
 ];

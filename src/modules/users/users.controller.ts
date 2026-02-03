@@ -2,18 +2,21 @@ import { Auth } from '@/common/decorators/auth.decorator';
 import { CurrentUser } from '@/common/decorators/current-user.decorator';
 import { type CurrentUserI } from '@/common/interfaces/current-user.interface';
 import {
+  BadRequestException,
   Body,
   Controller,
   Get,
+  HttpStatus,
   Param,
   ParseIntPipe,
+  ParseUUIDPipe,
   Patch,
   Post,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
-import { Role } from '@/common/enums/role.enum';
 import { ChangeUserStateDto } from './dto/change-state.dto';
+import { UserRole } from '@/generated/prisma/enums';
 
 @Controller('users')
 export class UsersController {
@@ -26,20 +29,29 @@ export class UsersController {
   }
 
   @Post()
-  @Auth(Role.ADMIN)
+  @Auth(UserRole.admin)
   createUser(@Body() body: CreateUserDto) {
     return this.usersService.createUser(body);
   }
 
   @Get()
-  @Auth(Role.ADMIN)
+  @Auth(UserRole.admin)
   getAllUsers() {
     return this.usersService.getAllUsers();
   }
 
   @Patch('change-state/:id')
   changeUserState(
-    @Param('id', new ParseIntPipe()) id: number,
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        exceptionFactory() {
+          return new BadRequestException('Id ivalido');
+        },
+      }),
+    )
+    id: string,
     @Body() body: ChangeUserStateDto,
   ) {
     return this.usersService.changeUserState(id, body);

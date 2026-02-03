@@ -1,4 +1,4 @@
-import { user_role } from '@/generated/prisma/enums';
+import { UserRole } from '@/generated/prisma/enums';
 import {
   IsBoolean,
   IsEnum,
@@ -32,13 +32,13 @@ export class CreateUserDto {
   })
   full_name: string;
 
-  @IsEnum(user_role, {
+  @IsEnum(UserRole, {
     message:
       'El rol seleccionado no es válido. Roles permitidos: ' +
-      Object.values(user_role).join(', '),
+      Object.values(UserRole).join(', '),
   })
   @IsNotEmpty({ message: 'El rol es obligatorio.' })
-  role: user_role;
+  role: UserRole;
 
   @IsBoolean({ message: 'El campo "activo" debe ser verdadero o falso.' })
   @IsOptional()

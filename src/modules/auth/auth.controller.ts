@@ -14,12 +14,15 @@ import { Auth } from '@/common/decorators/auth.decorator';
 
 @Controller('auth')
 export class AuthController {
+  private readonly cookieMaxAge = 1000 * 60 * 60 * 24;
+
   constructor(
     private readonly authService: AuthService,
     private readonly configService: ConfigService,
   ) {}
 
   @Post('login')
+  @HttpCode(HttpStatus.OK)
   async login(
     @Body() body: LoginDto,
     @Res({
@@ -31,11 +34,11 @@ export class AuthController {
 
     const isProd = this.configService.get<string>('NODE_ENV') === 'production';
 
-    res.cookie('Authentication', token, {
+    res.cookie('iceAuthentication', token, {
       httpOnly: true,
       secure: isProd,
       sameSite: isProd ? 'strict' : 'lax',
-      maxAge: 1000 * 60 * 60 * 24,
+      maxAge: this.cookieMaxAge,
     });
 
     return result;
@@ -47,7 +50,7 @@ export class AuthController {
   async logout(@Res({ passthrough: true }) res: Response) {
     const isProd = this.configService.get<string>('NODE_ENV') === 'production';
 
-    res.clearCookie('Authentication', {
+    res.clearCookie('iceAuthentication', {
       httpOnly: true,
       secure: isProd,
       sameSite: isProd ? 'strict' : 'lax',

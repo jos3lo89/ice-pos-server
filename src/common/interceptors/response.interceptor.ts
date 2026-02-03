@@ -15,6 +15,7 @@ export class ResponseInterceptor implements NestInterceptor {
           success: true,
           message: response.message || 'Request successful',
           data: response.data ?? response,
+          meta: response.meta ?? null,
         };
       }),
     );

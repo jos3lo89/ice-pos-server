@@ -4,6 +4,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { Request } from 'express';
 import { JwtPayload } from 'src/common/interfaces/jwt-payload.interface';
+import { CurrentUserI } from '@/common/interfaces/current-user.interface';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -11,7 +12,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     super({
       jwtFromRequest: ExtractJwt.fromExtractors([
         (request: Request) => {
-          return request?.cookies?.Authentication;
+          return request?.cookies?.iceAuthentication;
         },
       ]),
       ignoreExpiration: false,
@@ -19,7 +20,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: JwtPayload) {
+  async validate(payload: JwtPayload): Promise<CurrentUserI> {
     return { id: payload.sub, userName: payload.userName, role: payload.role };
   }
 }
