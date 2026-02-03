@@ -1,10 +1,18 @@
 import { PrismaService } from '@/core/prisma/prisma.service';
-import { Injectable } from '@nestjs/common';
+import {
+  ConflictException,
+  Injectable,
+  InternalServerErrorException,
+  Logger,
+} from '@nestjs/common';
 import { FindCategoryQueryDto } from './dto/find-category-query.dto';
 import { Prisma } from '@/generated/prisma/client';
+import { CreateCategoryDto } from './dto/create-category.dto';
 
 @Injectable()
 export class CategoriesService {
+  private readonly logger = new Logger(CategoriesService.name);
+
   constructor(private readonly prisma: PrismaService) {}
   async getAllCategories(query: FindCategoryQueryDto) {
     const { page = 1, limit = 5, search } = query;
@@ -52,5 +60,30 @@ export class CategoriesService {
         prevPage: prev,
       },
     };
+  }
+
+  async creatCategory(dto: CreateCategoryDto) {
+    const categoryFound = await this.prisma.categories.findUnique({
+      where: { slug: dto.slug },
+    });
+
+    if (categoryFound) {
+      throw new ConflictException('El slug ya esta registrado');
+    }
+
+    try {
+      const newCategory = await this.prisma.categories.create({
+        data: dto,
+      });
+      return newCategory;
+    } catch (error) {
+      this.logger.error(
+        `Error interno al crear la categoria con slug: ${dto.slug}`,
+      );
+
+      throw new InternalServerErrorException(
+        'Error interno al crear categoria',
+      );
+    }
   }
 }
