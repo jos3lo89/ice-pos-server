@@ -1,4 +1,4 @@
-import { PrismaClient, UserRole } from '../src/generated/prisma/client';
+import { PrismaClient, UserRole, Prisma } from '../src/generated/prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import { config } from 'dotenv';
 import bcryptjs from 'bcryptjs';
@@ -13,7 +13,7 @@ const prisma = new PrismaClient({
   adapter,
 });
 
-const settings = [
+const settings: Prisma.settingsCreateInput[] = [
   {
     key: 'igv_rate',
     value: '18',
@@ -31,7 +31,7 @@ const settings = [
   },
 ];
 
-const usersData = [
+const usersData: Prisma.usersCreateInput[] = [
   {
     username: 'admin',
     password: '111111',
@@ -69,26 +69,36 @@ const usersData = [
   },
 ];
 
-const categories = [
+const categories: Prisma.categoriesCreateInput[] = [
   {
     name: 'Bebidas',
     description: 'Refrescos, jugos, cervezas y bebidas alcohólicas',
+    slug: 'bebidas',
+    is_active: true,
   },
   {
     name: 'Entradas',
     description: 'Porciones para compartir y aperitivos',
+    slug: 'entradas',
+    is_active: true,
   },
   {
     name: 'Platos Fuertes',
     description: 'Platos principales del restaurante',
+    slug: 'platos-fuertes',
+    is_active: true,
   },
   {
     name: 'Postres',
     description: 'Dulces y helados para terminar la comida',
+    slug: 'postres',
+    is_active: true,
   },
   {
     name: 'Extras',
     description: 'Papas fritas, salsas y acompañamientos',
+    slug: 'Extras',
+    is_active: true,
   },
 ];
 
@@ -96,57 +106,51 @@ async function main() {
   console.log('... Iniciando seed');
 
   /* ===============================
-     ✅ 1. UPSERT DE SETTINGS
+     1. UPSERT DE SETTINGS
   =============================== */
 
-  await prisma.$transaction(
-    settings.map((item) =>
-      prisma.settings.upsert({
-        where: { key: item.key },
-        update: {
-          value: item.value,
-          description: item.description,
-        },
-        create: item,
-      }),
-    ),
-  );
-
-  console.log('✅ Settings insertados o actualizados');
+  for (const s of settings) {
+    const setting = await prisma.settings.upsert({
+      where: { key: s.key },
+      update: {
+        value: s.value,
+        description: s.description,
+      },
+      create: s,
+    });
+    console.log(`Created setting with key: ${setting.key}`);
+  }
 
   /* ===============================
-     ✅ 2. CREACIÓN DE USUARIOS (UPSERT)
+     2. CREACIÓN DE USUARIOS (UPSERT)
   =============================== */
 
   const salt = await bcryptjs.genSalt(10);
+  const hashedPwd = await bcryptjs.hash('123456', salt);
 
-  await prisma.$transaction(
-    usersData.map((user) =>
-      prisma.users.upsert({
-        where: { username: user.username },
-        update: {
-          full_name: user.full_name,
-          role: user.role,
-          phone: user.phone,
-        },
-        create: {
-          username: user.username,
-          password: bcryptjs.hashSync(user.password, salt),
-          full_name: user.full_name,
-          role: user.role,
-          phone: user.phone,
-        },
-      }),
-    ),
-  );
+  for (const u of usersData) {
+    const user = await prisma.users.upsert({
+      where: { username: u.username },
+      update: {
+        full_name: u.full_name,
+        role: u.role,
+        phone: u.phone,
+        password: hashedPwd,
+      },
+      create: {
+        ...u,
+        password: hashedPwd,
+      },
+    });
 
-  console.log('✅ Usuarios insertados o actualizados');
+    console.log(`Created user with userName: ${user.username}`);
+  }
 
   /* ===============================
-     ✅ 3. CLIENTE POR DEFECTO (UPSERT)
+     3. CLIENTE POR DEFECTO
   =============================== */
 
-  await prisma.clients.upsert({
+  const client = await prisma.clients.upsert({
     where: { numero_documento: '11111111' },
     create: {
       tipo_documento: '0',
@@ -158,30 +162,27 @@ async function main() {
     update: {},
   });
 
-  console.log('✅ Cliente por defecto listo');
+  console.log(`Created client with razon social: ${client.razon_social}`);
 
   /* ===============================
-     ✅ 4. CATEGORIES
+     4. CATEGORIES
   =============================== */
 
-  await prisma.$transaction(
-    categories.map((cat) =>
-      prisma.categories.upsert({
-        where: { name: cat.name },
-        update: {
-          description: cat.description,
-        },
-        create: {
-          description: cat.description,
-          name: cat.name,
-        },
-      }),
-    ),
-  );
+  for (const c of categories) {
+    const category = await prisma.categories.upsert({
+      where: { slug: c.slug },
+      update: {
+        description: c.description,
+        name: c.name,
+        is_active: c.is_active,
+      },
+      create: { ...c },
+    });
 
-  console.log('✅ Categorias listo');
+    console.log(`Created category with slug: ${category.slug}`);
+  }
 
-  console.log('... Seed finalizado ✅');
+  console.log(`Seeding finished.`);
 }
 main()
   .then(async () => {

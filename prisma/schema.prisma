@@ -36,7 +36,8 @@ model cash_transactions {
 
 model categories {
   id          String     @id @default(uuid())
-  name        String     @unique @db.VarChar(100)
+  name        String     @db.VarChar(100)
+  slug        String     @unique
   description String?
   is_active   Boolean    @default(true)
   created_at  DateTime   @default(now())

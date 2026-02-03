@@ -1,7 +1,8 @@
-import { Controller, Get } from '@nestjs/common';
+import { Controller, Get, Query } from '@nestjs/common';
 import { CategoriesService } from './categories.service';
 import { Auth } from '@/common/decorators/auth.decorator';
 import { UserRole } from '@/generated/prisma/enums';
+import { FindCategoryQueryDto } from './dto/find-category-query.dto';
 
 @Controller('categories')
 export class CategoriesController {
@@ -9,7 +10,7 @@ export class CategoriesController {
 
   @Get()
   @Auth(UserRole.admin)
-  getAllCategories() {
-    return this.categoriesService.getAllCategories();
+  getAllCategories(@Query() query: FindCategoryQueryDto) {
+    return this.categoriesService.getAllCategories(query);
   }
 }
