@@ -8,6 +8,8 @@ import {
 import { CreateUserDto } from './dto/create-user.dto';
 import bcryptjs from 'bcryptjs';
 import { ChangeUserStateDto } from './dto/change-state.dto';
+import { FindUserQueryDto } from './dto/find-user-query.dto';
+import { Prisma } from '@/generated/prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -70,14 +72,53 @@ export class UsersService {
     }
   }
 
-  async getAllUsers() {
-    const users = await this.prisma.users.findMany({
-      omit: {
-        password: true,
-      },
-    });
+  async getAllUsers(query: FindUserQueryDto) {
+    const { page = 1, limit = 5, search, role } = query;
+    const skip = (page - 1) * limit;
 
-    return users;
+    const where: Prisma.usersWhereInput = {};
+
+    if (search) {
+      where.OR = [{ full_name: { contains: search, mode: 'insensitive' } }];
+    }
+
+    if (role) {
+      where.role = role;
+    }
+
+    // const where: Prisma.usersWhereInput = search
+    //   ? { OR: [{ full_name: { contains: search, mode: 'insensitive' } }] }
+    //   : {};
+
+    const [total, users] = await this.prisma.$transaction([
+      this.prisma.users.count({ where }),
+      this.prisma.users.findMany({
+        where,
+        skip,
+        take: limit,
+        orderBy: { created_at: 'desc' },
+        omit: {
+          password: true,
+        },
+      }),
+    ]);
+
+    const lastPage = Math.ceil(total / limit);
+    const next = page < lastPage ? page + 1 : null;
+    const prev = page > 1 ? page - 1 : null;
+
+    return {
+      data: users,
+      meta: {
+        total,
+        page,
+        lastPage,
+        hasNext: page < lastPage,
+        hasPrev: page > 1,
+        nextPage: next,
+        prevPage: prev,
+      },
+    };
   }
 
   async changeUserState(userId: string, values: ChangeUserStateDto) {
