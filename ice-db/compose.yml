@@ -1,7 +1,7 @@
 services:
   db:
     image: postgres:15-alpine
-    container_name: pg15
+    container_name: ice-pg15
     ports:
       - '6000:5432'
     environment:
@@ -15,7 +15,7 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: pgadmin4
+    container_name: ice-pgadmin4
     environment:
       PGADMIN_DEFAULT_EMAIL: haru@rem.com
       PGADMIN_DEFAULT_PASSWORD: rem123
