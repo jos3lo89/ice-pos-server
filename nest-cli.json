@@ -11,5 +11,8 @@
         "swcrcPath": ".swcrc"
       }
     }
+  },
+  "generateOptions": {
+    "spec": false
   }
 }
