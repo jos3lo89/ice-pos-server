@@ -219,19 +219,31 @@ model settings {
   updated_at  DateTime @updatedAt
 }
 
+model floors {
+  id         String   @id @default(uuid())
+  name       String   @db.VarChar(50)
+  level      Int      @unique
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  tables     tables[]
+}
+
 model tables {
   id                                     String      @id @default(uuid())
   table_number                           String      @unique @db.VarChar(20)
-  floor                                  Int
+  floor_id                               String?
   status                                 TableStatus @default(disponible)
   reserved_for                           String?     @db.VarChar(100)
   current_order_id                       String?
   created_at                             DateTime    @default(now())
   updated_at                             DateTime    @updatedAt
+  floors                                 floors?     @relation(fields: [floor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   orders_orders_table_idTotables         orders[]    @relation("orders_table_idTotables")
   orders_tables_current_order_idToorders orders?     @relation("tables_current_order_idToorders", fields: [current_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_current_order")
 
   @@index([status], map: "idx_tables_status")
+  @@index([floor_id], map: "idx_tables_floor")
 }
 
 model users {
