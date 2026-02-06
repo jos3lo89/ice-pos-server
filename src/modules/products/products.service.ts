@@ -13,6 +13,7 @@ import { PrismaClientKnownRequestError } from '@/generated/prisma/internal/prism
 import { ProductToggleStatusDto } from './dto/product-toggle-status.dto';
 import { CreateVariantDTO } from './dto/create-variant.dto';
 import { dot } from 'node:test/reporters';
+import { CreateModifierDto } from './dto/create-modifier.dto';
 
 @Injectable()
 export class ProductsService {
@@ -95,6 +96,7 @@ export class ProductsService {
             },
           },
           product_variants: true,
+          product_modifiers: true,
         },
       }),
     ]);
@@ -173,6 +175,39 @@ export class ProductsService {
       );
 
       throw new InternalServerErrorException('Error interno al crear variante');
+    }
+  }
+
+  async createModifier(dto: CreateModifierDto) {
+    const productFound = await this.prisma.products.findUnique({
+      where: { id: dto.product_id },
+    });
+
+    if (!productFound) {
+      throw new NotFoundException('Producto no econtrado');
+    }
+
+    try {
+      const newModifier = await this.prisma.product_modifiers.create({
+        data: {
+          modifier_name: dto.modifier_name,
+          additional_price: dto.additional_price ? dto.additional_price : 0,
+          product_id: dto.product_id,
+        },
+        include: {
+          products: true,
+        },
+      });
+
+      return newModifier;
+    } catch (error) {
+      this.logger.error(
+        `Error interno al crea modificador de  nombre: ${dto.modifier_name}`,
+      );
+
+      throw new InternalServerErrorException(
+        'Error interno al crear modificador',
+      );
     }
   }
 }

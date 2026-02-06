@@ -17,6 +17,7 @@ import { UserRole } from '@/generated/prisma/enums';
 import { FindProductQueryDto } from './dto/find-product-query.dto';
 import { ProductToggleStatusDto } from './dto/product-toggle-status.dto';
 import { CreateVariantDTO } from './dto/create-variant.dto';
+import { CreateModifierDto } from './dto/create-modifier.dto';
 
 @Controller('products')
 export class ProductsController {
@@ -56,5 +57,11 @@ export class ProductsController {
   @Auth(UserRole.admin)
   createVariant(@Body() body: CreateVariantDTO) {
     return this.productService.createVariant(body);
+  }
+
+  @Post('modifier')
+  @Auth(UserRole.admin)
+  createModifier(@Body() body: CreateModifierDto) {
+    return this.productService.createModifier(body);
   }
 }
