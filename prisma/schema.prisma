@@ -188,14 +188,14 @@ model product_variants {
 
 model products {
   id                String              @id @default(uuid())
-  category_id       String?
   name              String              @db.VarChar(100)
-  description       String?
   price             Decimal             @db.Decimal(10, 2)
+  category_id       String
   area_impresion    PrinterTarget
+  description       String?
   is_available      Boolean             @default(true)
-  codigo_sunat      String?             @db.VarChar(20)
-  unidad_medida     String?             @default("NIU") @db.VarChar(3)
+  codigo_sunat      String?             @default("90101501") @db.VarChar(20)
+  unidad_medida     String?             @default("NIU") @db.VarChar(4)
   afec_igv_tipo     String?             @default("10") @db.VarChar(2)
   created_at        DateTime            @default(now())
   updated_at        DateTime            @updatedAt
