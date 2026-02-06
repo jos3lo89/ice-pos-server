@@ -16,6 +16,7 @@ import { Auth } from '@/common/decorators/auth.decorator';
 import { UserRole } from '@/generated/prisma/enums';
 import { FindProductQueryDto } from './dto/find-product-query.dto';
 import { ProductToggleStatusDto } from './dto/product-toggle-status.dto';
+import { CreateVariantDTO } from './dto/create-variant.dto';
 
 @Controller('products')
 export class ProductsController {
@@ -34,6 +35,7 @@ export class ProductsController {
   }
 
   @Patch(':id/status')
+  @Auth(UserRole.admin)
   productStatusToggle(
     @Param(
       'id',
@@ -48,5 +50,11 @@ export class ProductsController {
     @Body() body: ProductToggleStatusDto,
   ) {
     return this.productService.productStatusToggle(body, id);
+  }
+
+  @Post('variants')
+  @Auth(UserRole.admin)
+  createVariant(@Body() body: CreateVariantDTO) {
+    return this.productService.createVariant(body);
   }
 }

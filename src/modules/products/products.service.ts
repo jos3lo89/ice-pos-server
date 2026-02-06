@@ -11,6 +11,8 @@ import { FindProductQueryDto } from './dto/find-product-query.dto';
 import { Prisma } from '@/generated/prisma/client';
 import { PrismaClientKnownRequestError } from '@/generated/prisma/internal/prismaNamespace';
 import { ProductToggleStatusDto } from './dto/product-toggle-status.dto';
+import { CreateVariantDTO } from './dto/create-variant.dto';
+import { dot } from 'node:test/reporters';
 
 @Injectable()
 export class ProductsService {
@@ -92,6 +94,7 @@ export class ProductsService {
               slug: true,
             },
           },
+          product_variants: true,
         },
       }),
     ]);
@@ -140,6 +143,36 @@ export class ProductsService {
       throw new InternalServerErrorException(
         'Error interno al actulizar prodcuto',
       );
+    }
+  }
+
+  async createVariant(dto: CreateVariantDTO) {
+    const productFound = await this.prisma.products.findUnique({
+      where: { id: dto.product_id },
+    });
+
+    if (!productFound) {
+      throw new NotFoundException('Producto no econtrado');
+    }
+
+    try {
+      const newVariant = await this.prisma.product_variants.create({
+        data: {
+          variant_name: dto.variant_name,
+          additional_price: dto.additional_price ? dto.additional_price : 0,
+          product_id: dto.product_id,
+        },
+        include: {
+          products: true,
+        },
+      });
+      return newVariant;
+    } catch (error) {
+      this.logger.error(
+        `Error interno al crea variante de nombre: ${dto.variant_name}`,
+      );
+
+      throw new InternalServerErrorException('Error interno al crear variante');
     }
   }
 }
