@@ -126,4 +126,21 @@ export class CategoriesService {
       );
     }
   }
+
+  async getAll() {
+    const categories = await this.prisma.categories.findMany({
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        _count: {
+          select: {
+            products: true,
+          },
+        },
+      },
+    });
+
+    return categories;
+  }
 }

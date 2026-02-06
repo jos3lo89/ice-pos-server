@@ -27,6 +27,12 @@ export class CategoriesController {
     return this.categorieService.getAllCategories(query);
   }
 
+  @Get('all')
+  @Auth(UserRole.admin)
+  getAll() {
+    return this.categorieService.getAll();
+  }
+
   @Post()
   @Auth(UserRole.admin)
   create(@Body() body: CreateCategoryDto) {
