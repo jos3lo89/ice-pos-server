@@ -9,6 +9,7 @@ import { AuthModule } from './modules/auth/auth.module';
 import { CategoriesModule } from './modules/categories/categories.module';
 import { ProductsModule } from './modules/products/products.module';
 import { FloorsModule } from './modules/floors/floors.module';
+import { TablesModule } from './modules/tables/tables.module';
 
 @Module({
   imports: [
@@ -23,6 +24,7 @@ import { FloorsModule } from './modules/floors/floors.module';
     CategoriesModule,
     ProductsModule,
     FloorsModule,
+    TablesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
