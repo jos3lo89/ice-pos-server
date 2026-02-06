@@ -210,4 +210,21 @@ export class ProductsService {
       );
     }
   }
+
+  async getDetails(productId: string) {
+    const productFound = await this.prisma.products.findUnique({
+      where: { id: productId },
+      include: {
+        categories: true,
+        product_modifiers: true,
+        product_variants: true,
+      },
+    });
+
+    if (!productFound) {
+      throw new NotFoundException('Producto no encontrado');
+    }
+
+    return productFound;
+  }
 }

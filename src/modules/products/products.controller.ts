@@ -35,6 +35,23 @@ export class ProductsController {
     return this.productService.getAllProducts(query);
   }
 
+  @Get(':id/details')
+  @Auth(UserRole.admin)
+  getDetails(
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        exceptionFactory() {
+          return new BadRequestException('id invalido');
+        },
+      }),
+    )
+    id: string,
+  ) {
+    return this.productService.getDetails(id);
+  }
+
   @Patch(':id/status')
   @Auth(UserRole.admin)
   productStatusToggle(
