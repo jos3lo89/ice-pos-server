@@ -29,10 +29,11 @@ COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/prisma ./prisma
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/prisma.config.ts ./prisma.config.ts
-COPY --from=builder /app/docker-entrypoint.sh ./
+COPY --from=builder /app/scripts ./scripts
 
-RUN chmod +x docker-entrypoint.sh
+RUN sed -i 's/\r$//' ./scripts/docker-entrypoint.sh && \
+  chmod +x ./scripts/docker-entrypoint.sh
 
 EXPOSE 5000
 
-ENTRYPOINT ["./docker-entrypoint.sh"]
+ENTRYPOINT ["./scripts/docker-entrypoint.sh"]
