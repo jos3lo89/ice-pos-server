@@ -16,4 +16,9 @@ export class FloorsController {
   getFloors(@Query() query: FindFloorSQueryDto) {
     return this.floorService.getFloors(query);
   }
+
+  @Get('all')
+  getAllFloors() {
+    return this.floorService.getAllFloors();
+  }
 }

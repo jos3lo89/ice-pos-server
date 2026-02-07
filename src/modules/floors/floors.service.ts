@@ -82,4 +82,14 @@ export class FloorsService {
       },
     };
   }
+
+  async getAllFloors() {
+    const allFloors = await this.prisma.floors.findMany({
+      select: {
+        id: true,
+        level: true,
+      },
+    });
+    return allFloors;
+  }
 }
