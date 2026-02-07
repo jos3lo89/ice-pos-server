@@ -9,43 +9,44 @@ datasource db {
 }
 
 model cash_sessions {
-  id                Int                  @id @default(autoincrement())
-  cajero_id         Int
-  opening_balance   Decimal              @default(0) @db.Decimal(10, 2)
-  expected_balance  Decimal?             @default(0) @db.Decimal(10, 2)
-  actual_balance    Decimal?             @default(0) @db.Decimal(10, 2)
-  difference        Decimal?             @default(0) @db.Decimal(10, 2)
-  status            cash_session_status? @default(abierta)
+  id                String              @id @default(uuid())
+  cajero_id         String
+  opening_balance   Decimal             @default(0) @db.Decimal(10, 2)
+  expected_balance  Decimal?            @default(0) @db.Decimal(10, 2)
+  actual_balance    Decimal?            @default(0) @db.Decimal(10, 2)
+  difference        Decimal?            @default(0) @db.Decimal(10, 2)
+  status            CashSessionStatus?  @default(abierta)
   notes             String?
-  opened_at         DateTime?            @default(now()) @db.Timestamp(6)
-  closed_at         DateTime?            @db.Timestamp(6)
-  users             users                @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  opened_at         DateTime            @default(now())
+  closed_at         DateTime?
+  users             users               @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   cash_transactions cash_transactions[]
   payments          payments[]
 }
 
 model cash_transactions {
-  id              Int                   @id @default(autoincrement())
-  cash_session_id Int?
-  type            cash_transaction_type
-  amount          Decimal               @db.Decimal(10, 2)
+  id              String              @id @default(uuid())
+  cash_session_id String?
+  type            CashTransactionType
+  amount          Decimal             @db.Decimal(10, 2)
   description     String?
-  created_at      DateTime?             @default(now()) @db.Timestamp(6)
-  cash_sessions   cash_sessions?        @relation(fields: [cash_session_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  created_at      DateTime            @default(now())
+  cash_sessions   cash_sessions?      @relation(fields: [cash_session_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model categories {
-  id          Int        @id @default(autoincrement())
-  name        String     @unique @db.VarChar(100)
+  id          String     @id @default(uuid())
+  name        String     @db.VarChar(100)
+  slug        String     @unique
   description String?
   is_active   Boolean    @default(true)
-  created_at  DateTime?  @default(now()) @db.Timestamp(6)
-  updated_at  DateTime?  @default(now()) @db.Timestamp(6)
+  created_at  DateTime   @default(now())
+  updated_at  DateTime   @updatedAt
   products    products[]
 }
 
 model clients {
-  id               Int        @id @default(autoincrement())
+  id               String     @id @default(uuid())
   tipo_documento   String     @db.VarChar(1)
   numero_documento String     @unique @db.VarChar(15)
   razon_social     String     @db.VarChar(255)
@@ -55,14 +56,14 @@ model clients {
   provincia        String?    @db.VarChar(50)
   distrito         String?    @db.VarChar(50)
   email            String?    @db.VarChar(100)
-  created_at       DateTime?  @default(now()) @db.Timestamp(6)
-  updated_at       DateTime?  @default(now()) @db.Timestamp(6)
+  created_at       DateTime   @default(now())
+  updated_at       DateTime   @updatedAt
   payments         payments[]
 }
 
 model order_item_modifiers {
-  order_item_id     Int
-  modifier_id       Int
+  order_item_id     String
+  modifier_id       String
   modifier_name     String            @db.VarChar(100)
   additional_price  Decimal           @default(0) @db.Decimal(10, 2)
   product_modifiers product_modifiers @relation(fields: [modifier_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -72,18 +73,18 @@ model order_item_modifiers {
 }
 
 model order_items {
-  id                   Int                    @id @default(autoincrement())
-  order_id             Int
-  product_id           Int
-  variant_id           Int?
+  id                   String                 @id @default(uuid())
+  order_id             String
+  product_id           String
+  variant_id           String?
   quantity             Int                    @default(1)
   unit_price           Decimal                @db.Decimal(10, 2)
   modifiers_total      Decimal                @default(0) @db.Decimal(10, 2)
   line_total           Decimal                @db.Decimal(10, 2)
-  status               order_status           @default(pendiente)
+  status               OrderStatus            @default(pendiente)
   notes                String?
-  created_at           DateTime               @default(now()) @db.Timestamp(6)
-  updated_at           DateTime               @default(now()) @db.Timestamp(6)
+  created_at           DateTime               @default(now())
+  updated_at           DateTime               @updatedAt
   order_item_modifiers order_item_modifiers[]
   orders               orders                 @relation(fields: [order_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
   products             products               @relation(fields: [product_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -95,21 +96,21 @@ model order_items {
 }
 
 model orders {
-  id                                     Int           @id @default(autoincrement())
+  id                                     String        @id @default(uuid())
   order_number                           String        @unique @db.VarChar(20)
-  table_id                               Int?
-  mesero_id                              Int?
-  status                                 order_status  @default(pendiente)
-  order_type                             order_type    @default(en_local)
+  table_id                               String?
+  mesero_id                              String?
+  status                                 OrderStatus   @default(pendiente)
+  order_type                             OrderType     @default(en_local)
   cancellation_reason                    String?
   notes                                  String?
   subtotal                               Decimal?      @default(0) @db.Decimal(10, 2)
   igv                                    Decimal?      @default(0) @db.Decimal(10, 2)
   total                                  Decimal?      @default(0) @db.Decimal(10, 2)
   amount_paid                            Decimal?      @default(0) @db.Decimal(10, 2)
-  created_at                             DateTime?     @default(now()) @db.Timestamp(6)
-  updated_at                             DateTime?     @default(now()) @db.Timestamp(6)
-  completed_at                           DateTime?     @db.Timestamp(6)
+  created_at                             DateTime      @default(now())
+  updated_at                             DateTime      @updatedAt
+  completed_at                           DateTime?
   order_items                            order_items[]
   users                                  users?        @relation(fields: [mesero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   tables_orders_table_idTotables         tables?       @relation("orders_table_idTotables", fields: [table_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -122,8 +123,8 @@ model orders {
 }
 
 model payment_items {
-  payment_id    Int
-  order_item_id Int
+  payment_id    String
+  order_item_id String
   paid_quantity Int         @default(1)
   paid_amount   Decimal     @db.Decimal(10, 2)
   order_items   order_items @relation(fields: [order_item_id], references: [id], onUpdate: NoAction)
@@ -133,25 +134,25 @@ model payment_items {
 }
 
 model payments {
-  id                 Int             @id @default(autoincrement())
+  id                 String          @id @default(uuid())
   payment_number     String          @unique @db.VarChar(20)
-  order_id           Int
-  cajero_id          Int?
-  client_id          Int?
+  order_id           String
+  cajero_id          String?
+  client_id          String?
   amount             Decimal         @default(0) @db.Decimal(10, 2)
-  method             payment_method  @default(efectivo)
-  tipo_doc           doc_type        @default(ticket)
-  status             payment_status  @default(pendiente)
+  method             PaymentMethod   @default(efectivo)
+  tipo_doc           DocType         @default(ticket)
+  status             PaymentStatus   @default(pendiente)
   external_id        String?         @db.VarChar(100)
   serie_comprobante  String?         @db.VarChar(4)
   numero_comprobante String?         @db.VarChar(10)
   pdf_url            String?
   xml_url            String?
   enviado_sunat      Boolean?        @default(false)
-  created_at         DateTime?       @default(now()) @db.Timestamp(6)
+  created_at         DateTime        @default(now())
   notes              String?
-  updated_at         DateTime?       @default(now()) @db.Timestamp(6)
-  cash_session_id    Int?
+  updated_at         DateTime        @updatedAt
+  cash_session_id    String?
   payment_items      payment_items[]
   users              users?          @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   cash_sessions      cash_sessions?  @relation(fields: [cash_session_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
@@ -164,40 +165,42 @@ model payments {
 }
 
 model product_modifiers {
-  id                   Int                    @id @default(autoincrement())
-  product_id           Int?
+  id                   String                 @id @default(uuid())
+  product_id           String
   modifier_name        String                 @db.VarChar(100)
   additional_price     Decimal                @default(0) @db.Decimal(10, 2)
+  is_active            Boolean                @default(true)
   order_item_modifiers order_item_modifiers[]
-  products             products?              @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products             products               @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([product_id, modifier_name], map: "uq_modifier")
 }
 
 model product_variants {
-  id               Int           @id @default(autoincrement())
-  product_id       Int?
+  id               String        @id @default(uuid())
+  product_id       String
   variant_name     String        @db.VarChar(100)
   additional_price Decimal       @default(0) @db.Decimal(10, 2)
+  is_active        Boolean       @default(true)
   order_items      order_items[]
-  products         products?     @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  products         products      @relation(fields: [product_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@unique([product_id, variant_name], map: "uq_variant")
 }
 
 model products {
-  id                Int                 @id @default(autoincrement())
-  category_id       Int?
+  id                String              @id @default(uuid())
   name              String              @db.VarChar(100)
-  description       String?
   price             Decimal             @db.Decimal(10, 2)
-  area_impresion    printer_target
+  category_id       String
+  area_impresion    PrinterTarget
+  description       String?
   is_available      Boolean             @default(true)
-  codigo_sunat      String?             @db.VarChar(20)
-  unidad_medida     String?             @default("NIU") @db.VarChar(3)
+  codigo_sunat      String?             @default("90101501") @db.VarChar(20)
+  unidad_medida     String?             @default("NIU") @db.VarChar(4)
   afec_igv_tipo     String?             @default("10") @db.VarChar(2)
-  created_at        DateTime?           @default(now()) @db.Timestamp(6)
-  updated_at        DateTime?           @default(now()) @db.Timestamp(6)
+  created_at        DateTime            @default(now())
+  updated_at        DateTime            @updatedAt
   order_items       order_items[]
   product_modifiers product_modifiers[]
   product_variants  product_variants[]
@@ -208,40 +211,51 @@ model products {
 }
 
 model settings {
-  id          Int       @id @default(autoincrement())
-  key         String    @unique @db.VarChar(100)
+  id          String   @id @default(uuid())
+  key         String   @unique @db.VarChar(100)
   value       String?
   description String?
-  created_at  DateTime? @default(now()) @db.Timestamp(6)
-  updated_at  DateTime? @default(now()) @db.Timestamp(6)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
+}
+
+model floors {
+  id         String   @id @default(uuid())
+  name       String   @db.VarChar(50)
+  level      Int      @unique
+  is_active  Boolean  @default(true)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+  tables     tables[]
 }
 
 model tables {
-  id                                     Int          @id @default(autoincrement())
-  table_number                           String       @unique @db.VarChar(20)
-  floor                                  Int
-  status                                 table_status @default(disponible)
-  reserved_for                           String?      @db.VarChar(100)
-  current_order_id                       Int?
-  created_at                             DateTime?    @default(now()) @db.Timestamp(6)
-  updated_at                             DateTime?    @default(now()) @db.Timestamp(6)
-  orders_orders_table_idTotables         orders[]     @relation("orders_table_idTotables")
-  orders_tables_current_order_idToorders orders?      @relation("tables_current_order_idToorders", fields: [current_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_current_order")
+  id                                     String      @id @default(uuid())
+  table_number                           String      @unique @db.VarChar(20)
+  floor_id                               String?
+  status                                 TableStatus @default(disponible)
+  reserved_for                           String?     @db.VarChar(100)
+  current_order_id                       String?
+  created_at                             DateTime    @default(now())
+  updated_at                             DateTime    @updatedAt
+  floors                                 floors?     @relation(fields: [floor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  orders_orders_table_idTotables         orders[]    @relation("orders_table_idTotables")
+  orders_tables_current_order_idToorders orders?     @relation("tables_current_order_idToorders", fields: [current_order_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_current_order")
 
   @@index([status], map: "idx_tables_status")
+  @@index([floor_id], map: "idx_tables_floor")
 }
 
 model users {
-  id            Int             @id @default(autoincrement())
+  id            String          @id @default(uuid())
   username      String          @unique @db.VarChar(50)
   password      String
-  pin           String?         @db.VarChar(6)
   full_name     String          @db.VarChar(100)
-  role          user_role       @default(mesero)
+  role          UserRole        @default(mesero)
   is_active     Boolean         @default(true)
-  phone         String?         @unique @db.VarChar(20)
-  created_at    DateTime        @default(now()) @db.Timestamp(6)
-  updated_at    DateTime        @default(now()) @db.Timestamp(6)
+  phone         String          @unique @db.VarChar(9)
+  created_at    DateTime        @default(now())
+  updated_at    DateTime        @updatedAt
   cash_sessions cash_sessions[]
   orders        orders[]
   payments      payments[]
@@ -249,23 +263,23 @@ model users {
   @@index([role], map: "idx_users_role")
 }
 
-enum cash_session_status {
+enum CashSessionStatus {
   abierta
   cerrada
 }
 
-enum cash_transaction_type {
+enum CashTransactionType {
   ingreso
   egreso
 }
 
-enum doc_type {
+enum DocType {
   ticket
   boleta
   factura
 }
 
-enum order_status {
+enum OrderStatus {
   pendiente
   preparando
   listo
@@ -274,37 +288,37 @@ enum order_status {
   cancelado
 }
 
-enum order_type {
+enum OrderType {
   en_local
   para_llevar
 }
 
-enum payment_method {
+enum PaymentMethod {
   efectivo
   tarjeta
   yape
   plin
 }
 
-enum payment_status {
+enum PaymentStatus {
   pendiente
   pagado
   cancelado
 }
 
-enum printer_target {
+enum PrinterTarget {
   cocina
   bar
 }
 
-enum table_status {
+enum TableStatus {
   disponible
   ocupada
   reservada
   limpieza
 }
 
-enum user_role {
+enum UserRole {
   admin
   mesero
   cajero

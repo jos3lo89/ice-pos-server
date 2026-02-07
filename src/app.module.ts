@@ -6,6 +6,10 @@ import { ConfigModule } from '@nestjs/config';
 import { varsSchema } from './core/config/vars.config';
 import { UsersModule } from './modules/users/users.module';
 import { AuthModule } from './modules/auth/auth.module';
+import { CategoriesModule } from './modules/categories/categories.module';
+import { ProductsModule } from './modules/products/products.module';
+import { FloorsModule } from './modules/floors/floors.module';
+import { TablesModule } from './modules/tables/tables.module';
 
 @Module({
   imports: [
@@ -17,6 +21,10 @@ import { AuthModule } from './modules/auth/auth.module';
     PrismaModule,
     UsersModule,
     AuthModule,
+    CategoriesModule,
+    ProductsModule,
+    FloorsModule,
+    TablesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
