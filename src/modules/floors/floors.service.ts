@@ -92,4 +92,42 @@ export class FloorsService {
     });
     return allFloors;
   }
+
+  async getFloorsWithTables() {
+    const floorsWithtables = await this.prisma.floors.findMany({
+      where: { is_active: true },
+      select: {
+        id: true,
+        level: true,
+        name: true,
+        tables: {
+          select: {
+            id: true,
+            status: true,
+            table_number: true,
+            current_order_id: true,
+            orders_orders_table_idTotables: {
+              select: {
+                id: true,
+                order_number: true,
+                status: true,
+                total: true,
+                created_at: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    return floorsWithtables.map((floor) => ({
+      ...floor,
+      tables: floor.tables.map((table) => {
+        const { orders_orders_table_idTotables, ...rest } = table;
+        return {
+          ...rest,
+          current_order: orders_orders_table_idTotables,
+        };
+      }),
+    }));
+  }
 }

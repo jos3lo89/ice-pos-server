@@ -21,4 +21,9 @@ export class FloorsController {
   getAllFloors() {
     return this.floorService.getAllFloors();
   }
+
+  @Get('tables')
+  getFloorsWithTables() {
+    return this.floorService.getFloorsWithTables();
+  }
 }
