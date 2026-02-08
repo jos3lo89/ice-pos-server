@@ -11,6 +11,9 @@ import { ProductsModule } from './modules/products/products.module';
 import { FloorsModule } from './modules/floors/floors.module';
 import { TablesModule } from './modules/tables/tables.module';
 import { OrdersModule } from './modules/orders/orders.module';
+import { PaymentsModule } from './modules/payments/payments.module';
+import { CashSessionsService } from './modules/cash-sessions/cash-sessions.service';
+import { CashSessionsModule } from './modules/cash-sessions/cash-sessions.module';
 
 @Module({
   imports: [
@@ -27,8 +30,10 @@ import { OrdersModule } from './modules/orders/orders.module';
     FloorsModule,
     TablesModule,
     OrdersModule,
+    PaymentsModule,
+    CashSessionsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [AppService, CashSessionsService],
 })
 export class AppModule {}
