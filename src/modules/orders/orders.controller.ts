@@ -65,7 +65,7 @@ export class OrdersController {
   }
 
   @Get(':id/current')
-  @Auth(UserRole.admin, UserRole.mesero, UserRole.cajero)
+  @Auth()
   getCurrentOrder(
     @Param(
       'id',
