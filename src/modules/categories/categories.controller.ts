@@ -33,6 +33,11 @@ export class CategoriesController {
     return this.categorieService.getAll();
   }
 
+  @Get('products')
+  getCategoriesWithProducts() {
+    return this.categorieService.getCategoriesWithProducts();
+  }
+
   @Post()
   @Auth(UserRole.admin)
   create(@Body() body: CreateCategoryDto) {
