@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Get,
   HttpStatus,
   Param,
   ParseUUIDPipe,
@@ -61,5 +62,22 @@ export class OrdersController {
     @Body() dto: CancelOrderDto,
   ) {
     return this.ordersService.cancelOrder(id, dto.reason);
+  }
+
+  @Get(':id/current')
+  @Auth(UserRole.admin, UserRole.mesero, UserRole.cajero)
+  getCurrentOrder(
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        exceptionFactory() {
+          return new BadRequestException('id invalido');
+        },
+      }),
+    )
+    orderId: string,
+  ) {
+    return this.ordersService.getCurrentOrder(orderId);
   }
 }

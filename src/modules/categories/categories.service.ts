@@ -143,4 +143,29 @@ export class CategoriesService {
 
     return categories;
   }
+
+  async getCategoriesWithProducts() {
+    const categoriesWithProducts = await this.prisma.categories.findMany({
+      where: {
+        is_active: true,
+      },
+      select: {
+        id: true,
+        name: true,
+        slug: true,
+        products: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            price: true,
+            product_modifiers: true,
+            product_variants: true,
+          },
+        },
+      },
+    });
+
+    return categoriesWithProducts;
+  }
 }

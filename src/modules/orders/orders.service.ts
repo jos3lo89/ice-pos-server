@@ -1,5 +1,5 @@
 import { PrismaService } from '@/core/prisma/prisma.service';
-import { OrderStatus, OrderType, TableStatus } from '@/generated/prisma/enums';
+import { OrderStatus, TableStatus } from '@/generated/prisma/enums';
 import {
   BadRequestException,
   ConflictException,
@@ -46,6 +46,28 @@ export class OrdersService {
             mesero_id: meseroId,
             status: OrderStatus.pendiente,
             notes: dto.notes || null,
+          },
+          include: {
+            tables_orders_table_idTotables: {
+              include: {
+                floors: {
+                  select: {
+                    id: true,
+                    name: true,
+                    level: true,
+                    is_active: true,
+                  },
+                },
+              },
+            },
+            users: {
+              select: {
+                id: true,
+                full_name: true,
+                username: true,
+                role: true,
+              },
+            },
           },
         });
 
@@ -364,5 +386,55 @@ export class OrdersService {
     const paddedNum = nextNum.toString().padStart(3, '0');
 
     return `${prefix}${paddedNum}`;
+  }
+
+  async getCurrentOrder(orderId: string) {
+    const order = await this.prisma.orders.findUnique({
+      where: { id: orderId },
+      include: {
+        _count: {
+          select: {
+            order_items: true,
+          },
+        },
+        order_items: {
+          include: {
+            products: {
+              include: {
+                product_modifiers: true,
+                product_variants: true,
+              },
+            },
+          },
+        },
+        tables_orders_table_idTotables: {
+          include: {
+            floors: {
+              select: {
+                id: true,
+                name: true,
+                level: true,
+                is_active: true,
+              },
+            },
+          },
+        },
+        users: {
+          select: {
+            id: true,
+            username: true,
+            full_name: true,
+            role: true,
+            is_active: true,
+          },
+        },
+      },
+    });
+
+    if (!order) {
+      throw new NotFoundException('Orden no encontrada');
+    }
+
+    return order;
   }
 }
