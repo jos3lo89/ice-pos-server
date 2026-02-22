@@ -15,7 +15,7 @@ import {
 import { AddOrderItemDto } from './dto/add-order-items.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrdersService } from './orders.service';
-import { UserRole } from '@/generated/prisma/enums';
+import { RolUsuario } from '@/generated/prisma/enums';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 
 @Controller('orders')
@@ -23,13 +23,13 @@ export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  @Auth(UserRole.admin, UserRole.cajero, UserRole.mesero)
+  @Auth(RolUsuario.admin, RolUsuario.cajero, RolUsuario.mesero)
   createOrder(@Body() body: CreateOrderDto, @CurrentUser() user: CurrentUserI) {
     return this.ordersService.createOrder(body, user.id);
   }
 
   @Post(':id/items')
-  @Auth(UserRole.admin, UserRole.cajero, UserRole.mesero)
+  @Auth(RolUsuario.admin, RolUsuario.cajero, RolUsuario.mesero)
   addItemsToOrder(
     @Param(
       'id',
@@ -47,7 +47,7 @@ export class OrdersController {
   }
 
   @Patch(':id/cancel')
-  @Auth(UserRole.admin, UserRole.cajero)
+  @Auth(RolUsuario.admin, RolUsuario.cajero)
   async cancelOrder(
     @Param(
       'id',

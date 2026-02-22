@@ -7,10 +7,10 @@ import {
 } from '@nestjs/common';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import {
-  OrderStatus,
-  PaymentStatus,
+  EstadoMesa,
+  EstadoOrden,
+  EstadoPago,
   Prisma,
-  TableStatus,
 } from '@/generated/prisma/client';
 import { Decimal } from '@/generated/prisma/internal/prismaNamespace';
 
@@ -21,12 +21,12 @@ export class PaymentsService {
   async createPayment(dto: CreatePaymentDto, cajeroId: string) {
     return await this.prisma.$transaction(async (tx) => {
       // 1. Validar Sesión de Caja
-      const session = await tx.cash_sessions.findUnique({
+      const session = await tx.sesiones_caja.findUnique({
         where: { id: dto.cashSessionId },
       });
 
       if (!session) throw new NotFoundException('Sesión de caja no encontrada');
-      if (session.status !== 'abierta') {
+      if (session.estado !== 'abierta') {
         throw new ConflictException(
           'La sesión de caja está cerrada o es inválida',
         );
@@ -38,15 +38,15 @@ export class PaymentsService {
       }
 
       // 2. Validar Orden
-      const order = await tx.orders.findUnique({
+      const order = await tx.ordenes.findUnique({
         where: { id: dto.orderId },
       });
 
       if (!order) throw new NotFoundException('Orden no encontrada');
-      if (order.status === 'cancelado') {
+      if (order.estado === 'cancelado') {
         throw new ConflictException('No se puede cobrar una orden cancelada');
       }
-      if (order.status === 'completado') {
+      if (order.estado === 'completado') {
         throw new ConflictException(
           'La orden ya ha sido pagada en su totalidad',
         );
@@ -56,17 +56,17 @@ export class PaymentsService {
       const paymentNumber = await this.generatePaymentNumber(tx);
 
       // 4. Crear Cabecera del Pago (Estado pendiente temporalmente)
-      const payment = await tx.payments.create({
+      const payment = await tx.pagos.create({
         data: {
-          payment_number: paymentNumber,
-          order_id: dto.orderId,
+          numero_pago: paymentNumber,
+          orden_id: dto.orderId,
           cajero_id: cajeroId,
-          cash_session_id: dto.cashSessionId,
-          method: dto.method,
-          amount: 0, // Se calcula abajo
-          status: PaymentStatus.pendiente,
-          external_id: dto.transactionId,
-          notes: dto.notes,
+          sesion_caja_id: dto.cashSessionId,
+          metodo: dto.method,
+          monto: 0, // Se calcula abajo
+          estado: EstadoPago.pendiente,
+          id_externo: dto.transactionId,
+          notas: dto.notes,
         },
       });
 
@@ -74,32 +74,32 @@ export class PaymentsService {
 
       // 5. Procesar Líneas (Split Payment Logic)
       for (const line of dto.lines) {
-        const item = await tx.order_items.findUnique({
+        const item = await tx.items_orden.findUnique({
           where: { id: line.orderItemId },
         });
 
-        if (!item || item.order_id !== dto.orderId) {
+        if (!item || item.orden_id !== dto.orderId) {
           throw new BadRequestException(
             `El item ${line.orderItemId} no pertenece a esta orden`,
           );
         }
 
         // 5a. Calcular cuánto ya se ha pagado de este item
-        const paidAggregation = await tx.payment_items.aggregate({
+        const paidAggregation = await tx.detalles_pago.aggregate({
           where: {
-            order_item_id: line.orderItemId,
-            payments: { status: PaymentStatus.pagado }, // Solo contar pagos exitosos
+            item_orden_id: line.orderItemId,
+            pagos: { estado: EstadoPago.pagado }, // Solo contar pagos exitosos
           },
-          _sum: { paid_quantity: true },
+          _sum: { cantidad_pagada: true },
         });
 
-        const alreadyPaidQty = paidAggregation._sum.paid_quantity || 0;
+        const alreadyPaidQty = paidAggregation._sum.cantidad_pagada || 0;
         const currentQty = line.quantity;
 
         // 5b. Validar Sobrepago (Overpayment check)
-        if (alreadyPaidQty + currentQty > item.quantity) {
+        if (alreadyPaidQty + currentQty > item.cantidad) {
           throw new ConflictException(
-            `Estás intentando pagar ${currentQty} unidades del item "${item.product_id}" (o variante), pero solo quedan ${item.quantity - alreadyPaidQty} pendientes.`,
+            `Estás intentando pagar ${currentQty} unidades del item "${item.producto_id}" (o variante), pero solo quedan ${item.cantidad - alreadyPaidQty} pendientes.`,
           );
         }
 
@@ -107,22 +107,22 @@ export class PaymentsService {
         totalPaymentAmount = totalPaymentAmount.plus(lineAmount);
 
         // 5c. Crear Detalle del Pago
-        await tx.payment_items.create({
+        await tx.detalles_pago.create({
           data: {
-            payment_id: payment.id,
-            order_item_id: line.orderItemId,
-            paid_quantity: currentQty,
-            paid_amount: lineAmount,
+            pago_id: payment.id,
+            item_orden_id: line.orderItemId,
+            cantidad_pagada: currentQty,
+            monto_pagado: lineAmount,
           },
         });
       }
 
       // 6. Actualizar Cabecera del Pago a PAGADO
-      const completedPayment = await tx.payments.update({
+      const completedPayment = await tx.pagos.update({
         where: { id: payment.id },
         data: {
-          amount: totalPaymentAmount,
-          status: PaymentStatus.pagado,
+          monto: totalPaymentAmount,
+          estado: EstadoPago.pagado,
         },
       });
 
@@ -138,14 +138,14 @@ export class PaymentsService {
     tx: Prisma.TransactionClient,
   ): Promise<string> {
     const prefix = 'PAY-';
-    const lastPayment = await tx.payments.findFirst({
-      where: { payment_number: { startsWith: prefix } },
-      orderBy: { created_at: 'desc' },
+    const lastPayment = await tx.pagos.findFirst({
+      where: { numero_pago: { startsWith: prefix } },
+      orderBy: { fecha_creacion: 'desc' },
     });
 
     if (!lastPayment) return `${prefix}001`;
 
-    const numberPart = lastPayment.payment_number.replace(prefix, '');
+    const numberPart = lastPayment.numero_pago.replace(prefix, '');
     const nextNum = parseInt(numberPart, 10) + 1;
     return `${prefix}${nextNum.toString().padStart(3, '0')}`;
   }
@@ -155,24 +155,24 @@ export class PaymentsService {
     orderId: string,
   ) {
     // A. Calcular Total Esperado (Items activos)
-    const itemsAgg = await tx.order_items.aggregate({
-      where: { order_id: orderId, status: { not: 'cancelado' } },
-      _sum: { line_total: true },
+    const itemsAgg = await tx.items_orden.aggregate({
+      where: { orden_id: orderId, estado: { not: 'cancelado' } },
+      _sum: { total_linea: true },
     });
-    const totalExpected = itemsAgg._sum.line_total || new Decimal(0);
+    const totalExpected = itemsAgg._sum.total_linea || new Decimal(0);
 
     // B. Calcular Total Pagado (Pagos completados)
-    const paymentsAgg = await tx.payments.aggregate({
-      where: { order_id: orderId, status: PaymentStatus.pagado },
-      _sum: { amount: true },
+    const paymentsAgg = await tx.pagos.aggregate({
+      where: { orden_id: orderId, estado: EstadoPago.pagado },
+      _sum: { monto: true },
     });
-    const amountPaid = paymentsAgg._sum.amount || new Decimal(0);
+    const amountPaid = paymentsAgg._sum.monto || new Decimal(0);
 
     // C. Actualizar Orden (Montos acumulados)
-    await tx.orders.update({
+    await tx.ordenes.update({
       where: { id: orderId },
       data: {
-        amount_paid: amountPaid,
+        monto_pagado: amountPaid,
         // Nota: subtotal e IGV ya se calculan al agregar items, pero podrías recalcularlos aquí si deseas
       },
     });
@@ -185,21 +185,21 @@ export class PaymentsService {
       totalExpected.greaterThan(0)
     ) {
       // 1. Marcar Orden como Completada
-      const closedOrder = await tx.orders.update({
+      const closedOrder = await tx.ordenes.update({
         where: { id: orderId },
         data: {
-          status: OrderStatus.completado,
-          completed_at: new Date(),
+          estado: EstadoOrden.completado,
+          fecha_completado: new Date(),
         },
       });
 
       // 2. Liberar Mesa (Si existe)
-      if (closedOrder.table_id) {
-        await tx.tables.update({
-          where: { id: closedOrder.table_id },
+      if (closedOrder.mesa_id) {
+        await tx.mesas.update({
+          where: { id: closedOrder.mesa_id },
           data: {
-            status: TableStatus.disponible,
-            current_order_id: null,
+            estado: EstadoMesa.disponible,
+            orden_actual_id: null,
           },
         });
       }

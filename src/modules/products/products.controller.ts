@@ -13,7 +13,7 @@ import {
 import { ProductsService } from './products.service';
 import { CreateProductDto } from './dto/create-product.dto';
 import { Auth } from '@/common/decorators/auth.decorator';
-import { UserRole } from '@/generated/prisma/enums';
+import { RolUsuario } from '@/generated/prisma/enums';
 import { FindProductQueryDto } from './dto/find-product-query.dto';
 import { ProductToggleStatusDto } from './dto/product-toggle-status.dto';
 import { CreateVariantDTO } from './dto/create-variant.dto';
@@ -24,7 +24,7 @@ export class ProductsController {
   constructor(private readonly productService: ProductsService) {}
 
   @Post()
-  @Auth(UserRole.admin)
+  @Auth(RolUsuario.admin)
   createProduct(@Body() body: CreateProductDto) {
     return this.productService.createProduct(body);
   }
@@ -36,7 +36,7 @@ export class ProductsController {
   }
 
   @Get(':id/details')
-  @Auth(UserRole.admin)
+  @Auth(RolUsuario.admin)
   getDetails(
     @Param(
       'id',
@@ -53,7 +53,7 @@ export class ProductsController {
   }
 
   @Patch(':id/status')
-  @Auth(UserRole.admin)
+  @Auth(RolUsuario.admin)
   productStatusToggle(
     @Param(
       'id',
@@ -71,13 +71,13 @@ export class ProductsController {
   }
 
   @Post('variants')
-  @Auth(UserRole.admin)
+  @Auth(RolUsuario.admin)
   createVariant(@Body() body: CreateVariantDTO) {
     return this.productService.createVariant(body);
   }
 
   @Post('modifier')
-  @Auth(UserRole.admin)
+  @Auth(RolUsuario.admin)
   createModifier(@Body() body: CreateModifierDto) {
     return this.productService.createModifier(body);
   }

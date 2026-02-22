@@ -241,19 +241,19 @@ model pisos {
 model mesas {
   id                  String     @id @default(uuid())
   numero_mesa         String     @unique @db.VarChar(20)
-  salon_id            String?
+  piso_id             String?
   estado              EstadoMesa @default(disponible)
   reservada_para      String?    @db.VarChar(100)
   orden_actual_id     String?
   fecha_creacion      DateTime   @default(now())
   fecha_actualizacion DateTime   @updatedAt
 
-  salones           pisos?    @relation(fields: [salon_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pisos             pisos?    @relation(fields: [piso_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   ordenes_historial ordenes[] @relation("ordenes_mesa_idAmesas")
   orden_actual      ordenes?  @relation("mesas_orden_actual_idAordenes", fields: [orden_actual_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_orden_actual")
 
   @@index([estado], map: "idx_mesas_estado")
-  @@index([salon_id], map: "idx_mesas_salon")
+  @@index([piso_id], map: "idx_mesas_piso")
 }
 
 model usuarios {

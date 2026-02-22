@@ -1,4 +1,4 @@
-import { PaymentMethod } from '@/generated/prisma/enums';
+import { MetodoPago } from '@/generated/prisma/enums';
 import { Type } from 'class-transformer';
 import {
   IsArray,
@@ -37,9 +37,9 @@ export class CreatePaymentDto {
   @IsNotEmpty()
   cashSessionId: string; // Obligatorio: debe haber una caja abierta
 
-  @IsEnum(PaymentMethod)
+  @IsEnum(MetodoPago)
   @IsNotEmpty()
-  method: PaymentMethod;
+  method: MetodoPago;
 
   @IsArray()
   @ValidateNested({ each: true })

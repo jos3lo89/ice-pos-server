@@ -3,7 +3,7 @@ import { IsBoolean, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 export class CreateCategoryDto {
   @IsString()
   @IsNotEmpty()
-  name: string;
+  nombre: string;
 
   @IsString()
   @IsNotEmpty()
@@ -11,9 +11,9 @@ export class CreateCategoryDto {
 
   @IsString()
   @IsOptional()
-  description: string;
+  descripcion: string;
 
   @IsBoolean()
   @IsOptional()
-  is_active: boolean;
+  esta_activa: boolean;
 }

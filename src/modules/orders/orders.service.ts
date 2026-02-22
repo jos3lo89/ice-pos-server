@@ -1,5 +1,5 @@
 import { PrismaService } from '@/core/prisma/prisma.service';
-import { OrderStatus, TableStatus } from '@/generated/prisma/enums';
+import { EstadoMesa, EstadoOrden } from '@/generated/prisma/enums';
 import {
   BadRequestException,
   ConflictException,
@@ -23,7 +23,7 @@ export class OrdersService {
   async createOrder(dto: CreateOrderDto, meseroId: string) {
     try {
       const created = await this.prisma.$transaction(async (tx) => {
-        const tableCheck = await tx.tables.findUnique({
+        const tableCheck = await tx.mesas.findUnique({
           where: { id: dto.table_id },
         });
 
@@ -31,7 +31,7 @@ export class OrdersService {
           throw new NotFoundException('Mesa no econtrada');
         }
 
-        if (tableCheck.current_order_id) {
+        if (tableCheck.orden_actual_id) {
           throw new ConflictException(
             'La mesa acaba de ser ocupada por otro usuario',
           );
@@ -39,43 +39,43 @@ export class OrdersService {
 
         const orderNumber = await this.generateOrderNumber(tx);
 
-        const order = await tx.orders.create({
+        const order = await tx.ordenes.create({
           data: {
-            order_number: orderNumber,
-            table_id: dto.table_id,
+            numero_orden: orderNumber,
+            mesa_id: dto.table_id,
             mesero_id: meseroId,
-            status: OrderStatus.pendiente,
-            notes: dto.notes || null,
+            estado: EstadoOrden.pendiente,
+            notas: dto.notes || null,
           },
           include: {
-            tables_orders_table_idTotables: {
+            mesas_orden_actual: {
               include: {
-                floors: {
+                pisos: {
                   select: {
                     id: true,
-                    name: true,
-                    level: true,
-                    is_active: true,
+                    nombre: true,
+                    nivel: true,
+                    esta_activo: true,
                   },
                 },
               },
             },
-            users: {
+            usuarios: {
               select: {
                 id: true,
-                full_name: true,
-                username: true,
-                role: true,
+                nombre_completo: true,
+                usuario: true,
+                rol: true,
               },
             },
           },
         });
 
-        await tx.tables.update({
+        await tx.mesas.update({
           where: { id: dto.table_id },
           data: {
-            current_order_id: order.id,
-            status: TableStatus.ocupada,
+            orden_actual_id: order.id,
+            estado: EstadoMesa.ocupada,
           },
         });
 
@@ -99,23 +99,23 @@ export class OrdersService {
   async addOrderItem(orderId: string, dto: AddOrderItemDto) {
     return await this.prisma.$transaction(async (tx) => {
       // 1. Validar Orden
-      const order = await tx.orders.findUnique({
+      const order = await tx.ordenes.findUnique({
         where: { id: orderId },
-        select: { id: true, status: true },
+        select: { id: true, estado: true },
       });
 
       if (!order) {
         throw new NotFoundException('Orden no encontrada');
       }
 
-      if (order.status === 'cancelado' || order.status === 'completado') {
+      if (order.estado === 'cancelado' || order.estado === 'completado') {
         throw new BadRequestException(
           'No se pueden agregar items a una orden cerrada',
         );
       }
 
       // 2. Obtener Producto y validar disponibilidad
-      const product = await tx.products.findUnique({
+      const product = await tx.productos.findUnique({
         where: { id: dto.productId },
       });
 
@@ -123,20 +123,20 @@ export class OrdersService {
         throw new NotFoundException('Producto no encontrado');
       }
 
-      if (!product.is_available) {
+      if (!product.esta_disponible) {
         throw new BadRequestException(
-          `El producto ${product.name} no está disponible`,
+          `El producto ${product.nombre} no está disponible`,
         );
       }
 
       // --- CÁLCULO DE PRECIOS ---
 
-      let unitPrice = new Decimal(product.price);
+      let unitPrice = new Decimal(product.precio);
       let variantName: string | null = null; // Para uso futuro si decides guardar nombre de variante
 
       // 3. Procesar Variante (Si existe)
       if (dto.variant_id) {
-        const variant = await tx.product_variants.findUnique({
+        const variant = await tx.variantes_producto.findUnique({
           where: { id: dto.variant_id },
         });
 
@@ -144,15 +144,15 @@ export class OrdersService {
           throw new NotFoundException('Variante no encontrada');
         }
 
-        if (variant.product_id !== product.id) {
+        if (variant.producto_id !== product.id) {
           throw new BadRequestException(
             'La variante no corresponde al producto',
           );
         }
 
         // Sumar precio de variante al unitario
-        unitPrice = unitPrice.plus(variant.additional_price);
-        variantName = variant.variant_name;
+        unitPrice = unitPrice.plus(variant.precio_adicional);
+        variantName = variant.nombre_variante;
       }
 
       // 4. Procesar Modificadores
@@ -165,10 +165,10 @@ export class OrdersService {
       }[] = [];
 
       if (dto.modifier_ids && dto.modifier_ids.length > 0) {
-        const modifiers = await tx.product_modifiers.findMany({
+        const modifiers = await tx.modificadores_producto.findMany({
           where: {
             id: { in: dto.modifier_ids },
-            product_id: product.id, // Seguridad: El modificador debe ser del producto
+            producto_id: product.id, // Seguridad: El modificador debe ser del producto
           },
         });
 
@@ -179,13 +179,13 @@ export class OrdersService {
         }
 
         modifiers.forEach((mod) => {
-          modifiersTotal = modifiersTotal.plus(mod.additional_price);
+          modifiersTotal = modifiersTotal.plus(mod.precio_adicional);
 
           // SNAPSHOT: Guardamos nombre y precio actual para el histórico
           modifiersToInsert.push({
             modifier_id: mod.id,
-            modifier_name: mod.modifier_name,
-            additional_price: mod.additional_price,
+            modifier_name: mod.nombre_modificador,
+            additional_price: mod.precio_adicional,
           });
         });
       }
@@ -198,29 +198,30 @@ export class OrdersService {
       const modifiersTotalLine = modifiersTotal.times(quantityDecimal);
 
       // 6. Insertar Item y Modificadores (Atomic Write)
-      const newItem = await tx.order_items.create({
+      const newItem = await tx.items_orden.create({
         data: {
-          order_id: orderId,
-          product_id: product.id,
-          variant_id: dto.variant_id,
-          quantity: dto.quantity,
-          unit_price: unitPrice, // Precio Base + Variante
-          modifiers_total: modifiersTotalLine,
-          line_total: lineTotal,
-          notes: dto.notes,
+          orden_id: orderId,
+          producto_id: product.id,
+          variante_id: dto.variant_id,
+          cantidad: dto.quantity,
+          nombre_producto: product.nombre,
+          precio_unitario: unitPrice, // Precio Base + Variante
+          total_modificadores: modifiersTotalLine,
+          total_linea: lineTotal,
+          notas: dto.notes,
           // Insertamos los modificadores relacionados de una sola vez
-          order_item_modifiers: {
+          modificadores_item_orden: {
             create: modifiersToInsert.map((m) => ({
-              modifier_id: m.modifier_id,
-              modifier_name: m.modifier_name,
-              additional_price: m.additional_price,
+              modificador_id: m.modifier_id,
+              nombre_modificador: m.modifier_name,
+              precio_adicional: m.additional_price,
             })),
           },
         },
         include: {
-          order_item_modifiers: true, // Retornamos los detalles al front
-          products: { select: { name: true } },
-          product_variants: { select: { variant_name: true } },
+          modificadores_item_orden: true, // Retornamos los detalles al front
+          productos: { select: { nombre: true } },
+          variantes_producto: { select: { nombre_variante: true } },
         },
       });
 
@@ -236,25 +237,25 @@ export class OrdersService {
     orderId: string,
   ) {
     // 1. Obtener configuración IGV (Fallback a 18 si no existe)
-    const igvSetting = await tx.settings.findUnique({
-      where: { key: 'igv_rate' },
+    const igvSetting = await tx.configuraciones.findUnique({
+      where: { clave: 'igv_rate' },
     });
 
-    const igvRate = igvSetting?.value ? parseFloat(igvSetting.value) : 18;
+    const igvRate = igvSetting?.valor ? parseFloat(igvSetting.valor) : 18;
 
     // 2. Sumar todos los items activos (no cancelados)
     // SELECT COALESCE(SUM(line_total), 0) FROM order_items ...
-    const aggregation = await tx.order_items.aggregate({
+    const aggregation = await tx.items_orden.aggregate({
       where: {
-        order_id: orderId,
-        status: { not: 'cancelado' }, // Usando el enum de Prisma si está generado
+        orden_id: orderId,
+        estado: { not: 'cancelado' }, // Usando el enum de Prisma si está generado
       },
       _sum: {
-        line_total: true,
+        total_linea: true,
       },
     });
 
-    const totalItems = aggregation._sum.line_total || new Decimal(0);
+    const totalItems = aggregation._sum.total_linea || new Decimal(0);
 
     // 3. Desglose de IGV (Lógica Inversa: El precio ya incluye impuestos)
     // v_subtotal_neto := ROUND(v_total_items / (1 + (v_igv_rate / 100)), 2)
@@ -268,26 +269,26 @@ export class OrdersService {
     }
 
     // 4. Obtener Pagos Confirmados
-    const paymentsAggregation = await tx.payments.aggregate({
+    const paymentsAggregation = await tx.pagos.aggregate({
       where: {
-        order_id: orderId,
-        status: 'pagado',
+        orden_id: orderId,
+        estado: 'pagado',
       },
       _sum: {
-        amount: true,
+        monto: true,
       },
     });
 
-    const amountPaid = paymentsAggregation._sum.amount || new Decimal(0);
+    const amountPaid = paymentsAggregation._sum.monto || new Decimal(0);
 
     // 5. Actualizar la Orden
-    await tx.orders.update({
+    await tx.ordenes.update({
       where: { id: orderId },
       data: {
-        subtotal: subtotalNeto,
-        igv: igvAmount,
+        // subtotal: subtotalNeto,
+        // igv: igvAmount,
         total: totalItems,
-        amount_paid: amountPaid,
+        monto_pagado: amountPaid,
       },
     });
   }
@@ -295,53 +296,53 @@ export class OrdersService {
   async cancelOrder(orderId: string, reason: string) {
     return await this.prisma.$transaction(async (tx) => {
       // 1. Buscar Orden
-      const order = await tx.orders.findUnique({
+      const order = await tx.ordenes.findUnique({
         where: { id: orderId },
       });
 
       if (!order) throw new NotFoundException('Orden no encontrada');
 
       // Validaciones de negocio robustas
-      if (order.status === 'completado') {
+      if (order.estado === 'completado') {
         throw new ConflictException(
           'No se puede cancelar una orden que ya fue completada y pagada',
         );
       }
 
-      if (order.status === 'cancelado') {
+      if (order.estado === 'cancelado') {
         throw new ConflictException('La orden ya está cancelada');
       }
 
       // Validar si ya hay pagos realizados (Opcional: depende de tu política)
       // Si ya pagaron algo, quizás requiera una nota de crédito en lugar de cancelación simple.
-      if (order.amount_paid && order.amount_paid.toNumber() > 0) {
+      if (order.monto_pagado && order.monto_pagado.toNumber() > 0) {
         throw new ConflictException(
           'La orden tiene pagos registrados. Debe anular los pagos primero.',
         );
       }
 
       // 2. Actualizar Estado de la Orden
-      const cancelledOrder = await tx.orders.update({
+      const cancelledOrder = await tx.ordenes.update({
         where: { id: orderId },
         data: {
-          status: OrderStatus.cancelado,
-          cancellation_reason: reason,
+          estado: EstadoOrden.cancelado,
+          motivo_cancelacion: reason,
         },
       });
 
       // 3. Cancelar todos los items
-      await tx.order_items.updateMany({
-        where: { order_id: orderId },
-        data: { status: OrderStatus.cancelado },
+      await tx.items_orden.updateMany({
+        where: { orden_id: orderId },
+        data: { estado: EstadoOrden.cancelado },
       });
 
       // 4. Liberar la Mesa
-      if (order.table_id) {
-        await tx.tables.update({
-          where: { id: order.table_id },
+      if (order.mesa_id) {
+        await tx.mesas.update({
+          where: { id: order.mesa_id },
           data: {
-            status: TableStatus.disponible,
-            current_order_id: null,
+            estado: EstadoMesa.disponible,
+            orden_actual_id: null,
           },
         });
       }
@@ -354,31 +355,31 @@ export class OrdersService {
   private async generateOrderNumber(
     tx: Prisma.TransactionClient,
   ): Promise<string> {
-    const prefixSetting = await tx.settings.findUnique({
-      where: { key: 'order_number_prefix' },
-      select: { value: true },
+    const prefixSetting = await tx.configuraciones.findUnique({
+      where: { clave: 'order_number_prefix' },
+      select: { valor: true },
     });
 
-    const prefix = (prefixSetting?.value ?? 'ORD-').trim() || 'ORD-';
+    const prefix = (prefixSetting?.valor ?? 'ORD-').trim() || 'ORD-';
 
-    const lastOrder = await tx.orders.findFirst({
+    const lastOrder = await tx.ordenes.findFirst({
       where: {
-        order_number: { startsWith: prefix },
+        numero_orden: { startsWith: prefix },
       },
-      orderBy: { created_at: 'desc' },
-      select: { order_number: true },
+      orderBy: { fecha_creacion: 'desc' },
+      select: { numero_orden: true },
     });
 
     if (!lastOrder) {
       return `${prefix}001`;
     }
 
-    const numberPart = lastOrder.order_number.replace(prefix, '');
+    const numberPart = lastOrder.numero_orden.replace(prefix, '');
     const currentNum = parseInt(numberPart, 10);
 
     if (Number.isNaN(currentNum)) {
       throw new InternalServerErrorException(
-        `El último número de orden ${lastOrder.order_number} tiene un formato inválido`,
+        `El último número de orden ${lastOrder.numero_orden} tiene un formato inválido`,
       );
     }
 
@@ -389,43 +390,43 @@ export class OrdersService {
   }
 
   async getCurrentOrder(orderId: string) {
-    const order = await this.prisma.orders.findUnique({
+    const order = await this.prisma.ordenes.findUnique({
       where: { id: orderId },
       include: {
         _count: {
           select: {
-            order_items: true,
+            items_orden: true,
           },
         },
-        order_items: {
+        items_orden: {
           include: {
-            products: {
+            productos: {
               include: {
-                product_modifiers: true,
-                product_variants: true,
+                variantes_producto: true,
+                modificadores_producto: true,
               },
             },
           },
         },
-        tables_orders_table_idTotables: {
+        mesas_orden_actual: {
           include: {
-            floors: {
+            pisos: {
               select: {
                 id: true,
-                name: true,
-                level: true,
-                is_active: true,
+                nombre: true,
+                nivel: true,
+                esta_activo: true,
               },
             },
           },
         },
-        users: {
+        usuarios: {
           select: {
             id: true,
-            username: true,
-            full_name: true,
-            role: true,
-            is_active: true,
+            usuario: true,
+            nombre_completo: true,
+            rol: true,
+            esta_activo: true,
           },
         },
       },

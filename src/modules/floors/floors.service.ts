@@ -16,8 +16,8 @@ export class FloorsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateFloorDto) {
-    const floorFound = await this.prisma.floors.findUnique({
-      where: { level: dto.level },
+    const floorFound = await this.prisma.pisos.findUnique({
+      where: { nivel: dto.nivel },
     });
 
     if (floorFound) {
@@ -25,14 +25,14 @@ export class FloorsService {
     }
 
     try {
-      const newFloor = await this.prisma.floors.create({
+      const newFloor = await this.prisma.pisos.create({
         data: dto,
       });
 
       return newFloor;
     } catch (error) {
       this.logger.error(
-        `Error interno al crear el piso de numero: ${dto.level}`,
+        `Error interno al crear el piso de numero: ${dto.nivel}`,
       );
       throw new InternalServerErrorException('Error interno al crear el piso');
     }
@@ -42,23 +42,23 @@ export class FloorsService {
     const { page = 1, limit = 5, search } = query;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.floorsWhereInput = search
+    const where: Prisma.pisosWhereInput = search
       ? {
-          OR: [{ name: { contains: search, mode: 'insensitive' } }],
+          OR: [{ nombre: { contains: search, mode: 'insensitive' } }],
         }
       : {};
 
     const [total, floors] = await this.prisma.$transaction([
-      this.prisma.floors.count({ where }),
-      this.prisma.floors.findMany({
+      this.prisma.pisos.count({ where }),
+      this.prisma.pisos.findMany({
         where,
         skip,
         take: limit,
-        orderBy: { level: 'asc' },
+        orderBy: { nivel: 'asc' },
         include: {
           _count: {
             select: {
-              tables: true,
+              mesas: true,
             },
           },
         },
@@ -84,50 +84,42 @@ export class FloorsService {
   }
 
   async getAllFloors() {
-    const allFloors = await this.prisma.floors.findMany({
+    const allFloors = await this.prisma.pisos.findMany({
       select: {
         id: true,
-        level: true,
+        nivel: true,
       },
     });
     return allFloors;
   }
 
   async getFloorsWithTables() {
-    const floorsWithtables = await this.prisma.floors.findMany({
-      where: { is_active: true },
+    const floorsWithtables = await this.prisma.pisos.findMany({
+      where: { esta_activo: true },
       select: {
         id: true,
-        level: true,
-        name: true,
-        tables: {
+        nivel: true,
+        nombre: true,
+        mesas: {
           select: {
             id: true,
-            status: true,
-            table_number: true,
-            current_order_id: true,
-            orders_orders_table_idTotables: {
+            estado: true,
+            numero_mesa: true,
+            orden_actual_id: true,
+            orden_actual: {
               select: {
                 id: true,
-                order_number: true,
-                status: true,
+                numero_orden: true,
+                estado: true,
                 total: true,
-                created_at: true,
+                fecha_creacion: true,
               },
             },
           },
         },
       },
     });
-    return floorsWithtables.map((floor) => ({
-      ...floor,
-      tables: floor.tables.map((table) => {
-        const { orders_orders_table_idTotables, ...rest } = table;
-        return {
-          ...rest,
-          current_order: orders_orders_table_idTotables,
-        };
-      }),
-    }));
+
+    return floorsWithtables;
   }
 }
