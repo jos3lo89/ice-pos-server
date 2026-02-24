@@ -122,11 +122,11 @@ model ordenes {
   fecha_actualizacion DateTime    @updatedAt
   fecha_completado    DateTime?
 
-  items_orden        items_orden[]
-  usuarios           usuarios?     @relation(fields: [mesero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  mesas              mesas?        @relation("ordenes_mesa_idAmesas", fields: [mesa_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  pagos              pagos[]
-  mesas_orden_actual mesas[]       @relation("mesas_orden_actual_idAordenes")
+  items_orden    items_orden[]
+  usuarios       usuarios?     @relation(fields: [mesero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pagos          pagos[]
+  mesa_historial mesas?        @relation("RelacionHistorial", fields: [mesa_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  mesa_actual    mesas?        @relation("RelacionActual")
 
   @@index([fecha_creacion], map: "idx_ordenes_fecha_creacion")
   @@index([estado], map: "idx_ordenes_estado")
@@ -146,26 +146,25 @@ model detalles_pago {
 }
 
 model pagos {
-  id                  String        @id @default(uuid())
-  numero_pago         String        @unique @db.VarChar(20)
+  id                  String          @id @default(uuid())
+  numero_pago         String          @unique @db.VarChar(20)
   orden_id            String
   cajero_id           String?
   cliente_id          String?
   sesion_caja_id      String?
-  monto               Decimal       @default(0) @db.Decimal(10, 2)
-  metodo              MetodoPago    @default(efectivo)
-  tipo_documento      TipoDocumento @default(ticket)
-  estado              EstadoPago    @default(pendiente)
-  id_externo          String?       @db.VarChar(100)
+  monto               Decimal         @default(0) @db.Decimal(10, 2)
+  metodo              MetodoPago      @default(efectivo)
+  tipo_documento      TipoDocumento   @default(ticket)
+  estado              EstadoPago      @default(pendiente)
+  id_externo          String?         @db.VarChar(100)
   notas               String?
-  fecha_creacion      DateTime      @default(now())
-  fecha_actualizacion DateTime      @updatedAt
-
-  detalles_pago detalles_pago[]
-  usuarios      usuarios?       @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sesiones_caja sesiones_caja?  @relation(fields: [sesion_caja_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  clientes      clientes?       @relation(fields: [cliente_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  ordenes       ordenes         @relation(fields: [orden_id], references: [id], onUpdate: NoAction)
+  fecha_creacion      DateTime        @default(now())
+  fecha_actualizacion DateTime        @updatedAt
+  detalles_pago       detalles_pago[]
+  usuarios            usuarios?       @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sesiones_caja       sesiones_caja?  @relation(fields: [sesion_caja_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clientes            clientes?       @relation(fields: [cliente_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ordenes             ordenes         @relation(fields: [orden_id], references: [id], onUpdate: NoAction)
 
   @@index([sesion_caja_id], map: "idx_pagos_sesion_caja")
   @@index([orden_id], map: "idx_pagos_orden")
@@ -244,13 +243,13 @@ model mesas {
   piso_id             String?
   estado              EstadoMesa @default(disponible)
   reservada_para      String?    @db.VarChar(100)
-  orden_actual_id     String?
+  orden_actual_id     String?    @unique
   fecha_creacion      DateTime   @default(now())
   fecha_actualizacion DateTime   @updatedAt
 
   pisos             pisos?    @relation(fields: [piso_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  ordenes_historial ordenes[] @relation("ordenes_mesa_idAmesas")
-  orden_actual      ordenes?  @relation("mesas_orden_actual_idAordenes", fields: [orden_actual_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_orden_actual")
+  ordenes_historial ordenes[] @relation("RelacionHistorial")
+  orden_actual      ordenes?  @relation("RelacionActual", fields: [orden_actual_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([estado], map: "idx_mesas_estado")
   @@index([piso_id], map: "idx_mesas_piso")

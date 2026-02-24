@@ -47,28 +47,6 @@ export class OrdersService {
             estado: EstadoOrden.pendiente,
             notas: dto.notes || null,
           },
-          include: {
-            mesas_orden_actual: {
-              include: {
-                pisos: {
-                  select: {
-                    id: true,
-                    nombre: true,
-                    nivel: true,
-                    esta_activo: true,
-                  },
-                },
-              },
-            },
-            usuarios: {
-              select: {
-                id: true,
-                nombre_completo: true,
-                usuario: true,
-                rol: true,
-              },
-            },
-          },
         });
 
         await tx.mesas.update({
@@ -132,7 +110,8 @@ export class OrdersService {
       // --- CÁLCULO DE PRECIOS ---
 
       let unitPrice = new Decimal(product.precio);
-      let variantName: string | null = null; // Para uso futuro si decides guardar nombre de variante
+      let variantName: string | null = null;
+      let variantPrice = new Decimal(0);
 
       // 3. Procesar Variante (Si existe)
       if (dto.variant_id) {
@@ -153,6 +132,7 @@ export class OrdersService {
         // Sumar precio de variante al unitario
         unitPrice = unitPrice.plus(variant.precio_adicional);
         variantName = variant.nombre_variante;
+        variantPrice = variant.precio_adicional;
       }
 
       // 4. Procesar Modificadores
@@ -168,7 +148,7 @@ export class OrdersService {
         const modifiers = await tx.modificadores_producto.findMany({
           where: {
             id: { in: dto.modifier_ids },
-            producto_id: product.id, // Seguridad: El modificador debe ser del producto
+            producto_id: product.id,
           },
         });
 
@@ -181,7 +161,6 @@ export class OrdersService {
         modifiers.forEach((mod) => {
           modifiersTotal = modifiersTotal.plus(mod.precio_adicional);
 
-          // SNAPSHOT: Guardamos nombre y precio actual para el histórico
           modifiersToInsert.push({
             modifier_id: mod.id,
             modifier_name: mod.nombre_modificador,
@@ -204,11 +183,13 @@ export class OrdersService {
           producto_id: product.id,
           variante_id: dto.variant_id,
           cantidad: dto.quantity,
+          precio_variante: variantPrice,
+          nombre_variante: variantName,
           nombre_producto: product.nombre,
           precio_unitario: unitPrice, // Precio Base + Variante
           total_modificadores: modifiersTotalLine,
           total_linea: lineTotal,
-          notas: dto.notes,
+          notas: dto.notes || null,
           // Insertamos los modificadores relacionados de una sola vez
           modificadores_item_orden: {
             create: modifiersToInsert.map((m) => ({
@@ -219,9 +200,7 @@ export class OrdersService {
           },
         },
         include: {
-          modificadores_item_orden: true, // Retornamos los detalles al front
-          productos: { select: { nombre: true } },
-          variantes_producto: { select: { nombre_variante: true } },
+          modificadores_item_orden: true,
         },
       });
 
@@ -236,19 +215,12 @@ export class OrdersService {
     tx: Prisma.TransactionClient,
     orderId: string,
   ) {
-    // 1. Obtener configuración IGV (Fallback a 18 si no existe)
-    const igvSetting = await tx.configuraciones.findUnique({
-      where: { clave: 'igv_rate' },
-    });
-
-    const igvRate = igvSetting?.valor ? parseFloat(igvSetting.valor) : 18;
-
-    // 2. Sumar todos los items activos (no cancelados)
-    // SELECT COALESCE(SUM(line_total), 0) FROM order_items ...
+    // 1. Sumar todos los items activos (no cancelados)
+    // Optimizamos: Solo traemos la suma del total_linea
     const aggregation = await tx.items_orden.aggregate({
       where: {
         orden_id: orderId,
-        estado: { not: 'cancelado' }, // Usando el enum de Prisma si está generado
+        estado: { not: 'cancelado' },
       },
       _sum: {
         total_linea: true,
@@ -257,18 +229,24 @@ export class OrdersService {
 
     const totalItems = aggregation._sum.total_linea || new Decimal(0);
 
-    // 3. Desglose de IGV (Lógica Inversa: El precio ya incluye impuestos)
-    // v_subtotal_neto := ROUND(v_total_items / (1 + (v_igv_rate / 100)), 2)
-    let subtotalNeto = new Decimal(0);
-    let igvAmount = new Decimal(0);
+    /* // --- LÓGICA DE IGV COMENTADA (Se manejará en Facturación/Pagos) ---
+  const igvSetting = await tx.configuraciones.findUnique({
+    where: { clave: 'igv_rate' },
+  });
+  const igvRate = igvSetting?.valor ? parseFloat(igvSetting.valor) : 18;
 
-    if (totalItems.greaterThan(0)) {
-      const divisor = new Decimal(1).plus(new Decimal(igvRate).div(100)); // 1.18
-      subtotalNeto = totalItems.div(divisor).toDecimalPlaces(2);
-      igvAmount = totalItems.minus(subtotalNeto).toDecimalPlaces(2);
-    }
+  let subtotalNeto = new Decimal(0);
+  let igvAmount = new Decimal(0);
 
-    // 4. Obtener Pagos Confirmados
+  if (totalItems.greaterThan(0)) {
+    const divisor = new Decimal(1).plus(new Decimal(igvRate).div(100));
+    subtotalNeto = totalItems.div(divisor).toDecimalPlaces(2);
+    igvAmount = totalItems.minus(subtotalNeto).toDecimalPlaces(2);
+  }
+  */
+
+    // 2. Obtener Pagos Confirmados
+    // Esto es vital para saber si la orden está saldada o pendiente
     const paymentsAggregation = await tx.pagos.aggregate({
       where: {
         orden_id: orderId,
@@ -281,12 +259,10 @@ export class OrdersService {
 
     const amountPaid = paymentsAggregation._sum.monto || new Decimal(0);
 
-    // 5. Actualizar la Orden
+    // 3. Actualizar la Orden
     await tx.ordenes.update({
       where: { id: orderId },
       data: {
-        // subtotal: subtotalNeto,
-        // igv: igvAmount,
         total: totalItems,
         monto_pagado: amountPaid,
       },
@@ -400,24 +376,7 @@ export class OrdersService {
         },
         items_orden: {
           include: {
-            productos: {
-              include: {
-                variantes_producto: true,
-                modificadores_producto: true,
-              },
-            },
-          },
-        },
-        mesas_orden_actual: {
-          include: {
-            pisos: {
-              select: {
-                id: true,
-                nombre: true,
-                nivel: true,
-                esta_activo: true,
-              },
-            },
+            modificadores_item_orden: true,
           },
         },
         usuarios: {
@@ -427,6 +386,18 @@ export class OrdersService {
             nombre_completo: true,
             rol: true,
             esta_activo: true,
+          },
+        },
+        mesa_actual: {
+          include: {
+            pisos: {
+              select: {
+                id: true,
+                nombre: true,
+                nivel: true,
+                esta_activo: true,
+              },
+            },
           },
         },
       },

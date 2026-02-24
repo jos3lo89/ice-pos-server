@@ -12,7 +12,6 @@ import { Prisma } from '@/generated/prisma/client';
 import { PrismaClientKnownRequestError } from '@/generated/prisma/internal/prismaNamespace';
 import { ProductToggleStatusDto } from './dto/product-toggle-status.dto';
 import { CreateVariantDTO } from './dto/create-variant.dto';
-import { dot } from 'node:test/reporters';
 import { CreateModifierDto } from './dto/create-modifier.dto';
 
 @Injectable()
