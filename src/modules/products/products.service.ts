@@ -12,7 +12,6 @@ import { Prisma } from '@/generated/prisma/client';
 import { PrismaClientKnownRequestError } from '@/generated/prisma/internal/prismaNamespace';
 import { ProductToggleStatusDto } from './dto/product-toggle-status.dto';
 import { CreateVariantDTO } from './dto/create-variant.dto';
-import { dot } from 'node:test/reporters';
 import { CreateModifierDto } from './dto/create-modifier.dto';
 
 @Injectable()
@@ -22,7 +21,7 @@ export class ProductsService {
   constructor(private readonly prisma: PrismaService) {}
 
   async createProduct(dto: CreateProductDto) {
-    const categoryFound = await this.prisma.categories.findUnique({
+    const categoryFound = await this.prisma.categorias.findUnique({
       where: { id: dto.category_id },
     });
 
@@ -31,13 +30,13 @@ export class ProductsService {
     }
 
     try {
-      const newProduct = await this.prisma.products.create({
+      const newProduct = await this.prisma.productos.create({
         data: {
-          name: dto.name,
-          price: dto.price,
-          category_id: dto.category_id,
+          nombre: dto.name,
+          precio: dto.price,
+          categoria_id: dto.category_id,
           area_impresion: dto.area_impresion,
-          description: dto.description || null,
+          descripcion: dto.description || null,
         },
       });
 
@@ -66,37 +65,37 @@ export class ProductsService {
     const { page = 1, limit = 5, search, category } = query;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.productsWhereInput = {};
+    const where: Prisma.productosWhereInput = {};
 
     if (search) {
-      where.OR = [{ name: { contains: search, mode: 'insensitive' } }];
+      where.OR = [{ nombre: { contains: search, mode: 'insensitive' } }];
     }
 
     if (category) {
-      where.categories = {
+      where.categorias = {
         slug: category,
       };
     }
 
     const [total, products] = await this.prisma.$transaction([
-      this.prisma.products.count({ where }),
-      this.prisma.products.findMany({
+      this.prisma.productos.count({ where }),
+      this.prisma.productos.findMany({
         where,
         skip,
         take: limit,
         orderBy: {
-          name: 'asc',
+          nombre: 'asc',
         },
         include: {
-          categories: {
+          categorias: {
             select: {
               id: true,
-              name: true,
+              nombre: true,
               slug: true,
             },
           },
-          product_variants: true,
-          product_modifiers: true,
+          variantes_producto: true,
+          modificadores_producto: true,
         },
       }),
     ]);
@@ -120,7 +119,7 @@ export class ProductsService {
   }
 
   async productStatusToggle(dto: ProductToggleStatusDto, productId: string) {
-    const productFound = await this.prisma.products.findUnique({
+    const productFound = await this.prisma.productos.findUnique({
       where: { id: productId },
     });
 
@@ -129,10 +128,10 @@ export class ProductsService {
     }
 
     try {
-      const updateProduct = await this.prisma.products.update({
+      const updateProduct = await this.prisma.productos.update({
         where: { id: productId },
         data: {
-          is_available: dto.is_available,
+          esta_disponible: dto.is_available,
         },
       });
 
@@ -149,7 +148,7 @@ export class ProductsService {
   }
 
   async createVariant(dto: CreateVariantDTO) {
-    const productFound = await this.prisma.products.findUnique({
+    const productFound = await this.prisma.productos.findUnique({
       where: { id: dto.product_id },
     });
 
@@ -158,14 +157,14 @@ export class ProductsService {
     }
 
     try {
-      const newVariant = await this.prisma.product_variants.create({
+      const newVariant = await this.prisma.variantes_producto.create({
         data: {
-          variant_name: dto.variant_name,
-          additional_price: dto.additional_price ? dto.additional_price : 0,
-          product_id: dto.product_id,
+          nombre_variante: dto.variant_name,
+          precio_adicional: dto.additional_price ? dto.additional_price : 0,
+          producto_id: dto.product_id,
         },
         include: {
-          products: true,
+          productos: true,
         },
       });
       return newVariant;
@@ -179,7 +178,7 @@ export class ProductsService {
   }
 
   async createModifier(dto: CreateModifierDto) {
-    const productFound = await this.prisma.products.findUnique({
+    const productFound = await this.prisma.productos.findUnique({
       where: { id: dto.product_id },
     });
 
@@ -188,14 +187,14 @@ export class ProductsService {
     }
 
     try {
-      const newModifier = await this.prisma.product_modifiers.create({
+      const newModifier = await this.prisma.modificadores_producto.create({
         data: {
-          modifier_name: dto.modifier_name,
-          additional_price: dto.additional_price ? dto.additional_price : 0,
-          product_id: dto.product_id,
+          nombre_modificador: dto.modifier_name,
+          precio_adicional: dto.additional_price ? dto.additional_price : 0,
+          producto_id: dto.product_id,
         },
         include: {
-          products: true,
+          productos: true,
         },
       });
 
@@ -212,12 +211,12 @@ export class ProductsService {
   }
 
   async getDetails(productId: string) {
-    const productFound = await this.prisma.products.findUnique({
+    const productFound = await this.prisma.productos.findUnique({
       where: { id: productId },
       include: {
-        categories: true,
-        product_modifiers: true,
-        product_variants: true,
+        categorias: true,
+        modificadores_producto: true,
+        variantes_producto: true,
       },
     });
 

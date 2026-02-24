@@ -17,10 +17,10 @@ export class UsersService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getProfile(userId: string) {
-    const user = await this.prisma.users.findUnique({
+    const user = await this.prisma.usuarios.findUnique({
       where: { id: userId },
       omit: {
-        password: true,
+        contrasena: true,
       },
     });
 
@@ -33,17 +33,17 @@ export class UsersService {
 
   async createUser(data: CreateUserDto) {
     try {
-      const userByUsername = await this.prisma.users.findUnique({
-        where: { username: data.username },
+      const userByUsername = await this.prisma.usuarios.findUnique({
+        where: { usuario: data.usuario },
       });
 
       if (userByUsername) {
         throw new ConflictException('Nombre de usuario ya existe');
       }
 
-      if (data.phone) {
-        const userByPhone = await this.prisma.users.findUnique({
-          where: { phone: data.phone },
+      if (data.telefono) {
+        const userByPhone = await this.prisma.usuarios.findUnique({
+          where: { telefono: data.telefono },
         });
         if (userByPhone) {
           throw new ConflictException('Teléfono ya existe');
@@ -51,22 +51,22 @@ export class UsersService {
       }
 
       const salt = await bcryptjs.genSalt(10);
-      const hashedPassword = await bcryptjs.hash(data.password, salt);
+      const hashedPassword = await bcryptjs.hash(data.contrasena, salt);
 
-      const newUser = await this.prisma.users.create({
+      const newUser = await this.prisma.usuarios.create({
         data: {
           ...data,
-          password: hashedPassword,
+          contrasena: hashedPassword,
         },
         omit: {
-          password: true,
+          contrasena: true,
         },
       });
 
       return newUser;
     } catch (error) {
       this.logger.error(
-        `Error creando usuario ${data.username}: ${error.message}`,
+        `Error creando usuario ${data.usuario}: ${error.message}`,
       );
       throw error;
     }
@@ -76,14 +76,16 @@ export class UsersService {
     const { page = 1, limit = 5, search, role } = query;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.usersWhereInput = {};
+    const where: Prisma.usuariosWhereInput = {};
 
     if (search) {
-      where.OR = [{ full_name: { contains: search, mode: 'insensitive' } }];
+      where.OR = [
+        { nombre_completo: { contains: search, mode: 'insensitive' } },
+      ];
     }
 
     if (role) {
-      where.role = role;
+      where.rol = role;
     }
 
     // const where: Prisma.usersWhereInput = search
@@ -91,14 +93,14 @@ export class UsersService {
     //   : {};
 
     const [total, users] = await this.prisma.$transaction([
-      this.prisma.users.count({ where }),
-      this.prisma.users.findMany({
+      this.prisma.usuarios.count({ where }),
+      this.prisma.usuarios.findMany({
         where,
         skip,
         take: limit,
-        orderBy: { created_at: 'desc' },
+        orderBy: { fecha_creacion: 'desc' },
         omit: {
-          password: true,
+          contrasena: true,
         },
       }),
     ]);
@@ -122,15 +124,15 @@ export class UsersService {
   }
 
   async changeUserState(userId: string, values: ChangeUserStateDto) {
-    const newUser = await this.prisma.users.update({
+    const newUser = await this.prisma.usuarios.update({
       where: {
         id: userId,
       },
       data: {
-        is_active: values.is_active,
+        esta_activo: values.is_active,
       },
       omit: {
-        password: true,
+        contrasena: true,
       },
     });
 

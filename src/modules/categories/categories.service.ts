@@ -21,26 +21,26 @@ export class CategoriesService {
     const { page = 1, limit = 5, search } = query;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.categoriesWhereInput = search
+    const where: Prisma.categoriasWhereInput = search
       ? {
           OR: [
-            { name: { contains: search, mode: 'insensitive' } },
+            { nombre: { contains: search, mode: 'insensitive' } },
             { slug: { contains: search, mode: 'insensitive' } },
           ],
         }
       : {};
 
     const [total, categories] = await this.prisma.$transaction([
-      this.prisma.categories.count({ where }),
-      this.prisma.categories.findMany({
+      this.prisma.categorias.count({ where }),
+      this.prisma.categorias.findMany({
         where,
         skip,
         take: limit,
-        orderBy: { created_at: 'desc' },
+        orderBy: { fecha_creacion: 'desc' },
         include: {
           _count: {
             select: {
-              products: true,
+              productos: true,
             },
           },
         },
@@ -66,7 +66,7 @@ export class CategoriesService {
   }
 
   async creatCategory(dto: CreateCategoryDto) {
-    const categoryFound = await this.prisma.categories.findUnique({
+    const categoryFound = await this.prisma.categorias.findUnique({
       where: { slug: dto.slug },
     });
 
@@ -75,7 +75,7 @@ export class CategoriesService {
     }
 
     try {
-      const newCategory = await this.prisma.categories.create({
+      const newCategory = await this.prisma.categorias.create({
         data: dto,
       });
       return newCategory;
@@ -91,7 +91,7 @@ export class CategoriesService {
   }
 
   async toggleCategoryStatus(dto: UpdateCategoryStatusDto, id: string) {
-    const catFound = await this.prisma.categories.findUnique({
+    const catFound = await this.prisma.categorias.findUnique({
       where: {
         id,
       },
@@ -102,17 +102,17 @@ export class CategoriesService {
     }
 
     try {
-      const updateCat = await this.prisma.categories.update({
+      const updateCat = await this.prisma.categorias.update({
         where: {
           id,
         },
         data: {
-          is_active: dto.is_active,
+          esta_activa: dto.is_active,
         },
         include: {
           _count: {
             select: {
-              products: true,
+              productos: true,
             },
           },
         },
@@ -128,14 +128,14 @@ export class CategoriesService {
   }
 
   async getAll() {
-    const categories = await this.prisma.categories.findMany({
+    const categories = await this.prisma.categorias.findMany({
       select: {
         id: true,
-        name: true,
+        nombre: true,
         slug: true,
         _count: {
           select: {
-            products: true,
+            productos: true,
           },
         },
       },
@@ -145,22 +145,22 @@ export class CategoriesService {
   }
 
   async getCategoriesWithProducts() {
-    const categoriesWithProducts = await this.prisma.categories.findMany({
+    const categoriesWithProducts = await this.prisma.categorias.findMany({
       where: {
-        is_active: true,
+        esta_activa: true,
       },
       select: {
         id: true,
-        name: true,
+        nombre: true,
         slug: true,
-        products: {
+        productos: {
           select: {
             id: true,
-            name: true,
-            description: true,
-            price: true,
-            product_modifiers: true,
-            product_variants: true,
+            nombre: true,
+            descripcion: true,
+            precio: true,
+            modificadores_producto: true,
+            variantes_producto: true,
           },
         },
       },

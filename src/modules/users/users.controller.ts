@@ -16,7 +16,7 @@ import {
 import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { ChangeUserStateDto } from './dto/change-state.dto';
-import { UserRole } from '@/generated/prisma/enums';
+import { RolUsuario } from '@/generated/prisma/enums';
 import { FindUserQueryDto } from './dto/find-user-query.dto';
 
 @Controller('users')
@@ -30,13 +30,13 @@ export class UsersController {
   }
 
   @Post()
-  @Auth(UserRole.admin)
+  @Auth(RolUsuario.admin)
   createUser(@Body() body: CreateUserDto) {
     return this.usersService.createUser(body);
   }
 
   @Get()
-  @Auth(UserRole.admin)
+  @Auth(RolUsuario.admin)
   getAllUsers(@Query() query: FindUserQueryDto) {
     return this.usersService.getAllUsers(query);
   }

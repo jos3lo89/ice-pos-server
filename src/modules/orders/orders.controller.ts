@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpStatus,
   Param,
@@ -15,21 +16,22 @@ import {
 import { AddOrderItemDto } from './dto/add-order-items.dto';
 import { CreateOrderDto } from './dto/create-order.dto';
 import { OrdersService } from './orders.service';
-import { UserRole } from '@/generated/prisma/enums';
+import { RolUsuario } from '@/generated/prisma/enums';
 import { CancelOrderDto } from './dto/cancel-order.dto';
+import { retry } from 'rxjs';
 
 @Controller('orders')
 export class OrdersController {
   constructor(private readonly ordersService: OrdersService) {}
 
   @Post()
-  @Auth(UserRole.admin, UserRole.cajero, UserRole.mesero)
+  @Auth(RolUsuario.admin, RolUsuario.cajero, RolUsuario.mesero)
   createOrder(@Body() body: CreateOrderDto, @CurrentUser() user: CurrentUserI) {
     return this.ordersService.createOrder(body, user.id);
   }
 
   @Post(':id/items')
-  @Auth(UserRole.admin, UserRole.cajero, UserRole.mesero)
+  @Auth(RolUsuario.admin, RolUsuario.cajero, RolUsuario.mesero)
   addItemsToOrder(
     @Param(
       'id',
@@ -47,7 +49,7 @@ export class OrdersController {
   }
 
   @Patch(':id/cancel')
-  @Auth(UserRole.admin, UserRole.cajero)
+  @Auth(RolUsuario.admin, RolUsuario.cajero)
   async cancelOrder(
     @Param(
       'id',
@@ -79,5 +81,40 @@ export class OrdersController {
     orderId: string,
   ) {
     return this.ordersService.getCurrentOrder(orderId);
+  }
+
+  // borrar un item antes de mandarlo aa la comanda
+
+  @Delete(':id/delete-item')
+  deleteItem(
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        exceptionFactory() {
+          return new BadRequestException('id invalido');
+        },
+      }),
+    )
+    id: string,
+  ) {
+    return this.ordersService.deleteItem(id);
+  }
+
+  // borrar orden antes de enviar a la comanda
+  @Delete(':id/delete-order')
+  deleteOrder(
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        exceptionFactory() {
+          return new BadRequestException('id invalido');
+        },
+      }),
+    )
+    id: string,
+  ) {
+    return this.ordersService.deleteOrder(id);
   }
 }

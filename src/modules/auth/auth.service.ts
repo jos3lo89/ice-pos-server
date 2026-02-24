@@ -15,10 +15,10 @@ export class AuthService {
     private readonly prisma: PrismaService,
   ) {}
 
-  async login(values: LoginDto) {
-    const user = await this.prisma.users.findUnique({
+  async login(dto: LoginDto) {
+    const user = await this.prisma.usuarios.findUnique({
       where: {
-        username: values.userName,
+        usuario: dto.userName,
       },
     });
 
@@ -26,16 +26,16 @@ export class AuthService {
       throw new NotFoundException('Usuario no encontrado');
     }
 
-    const pwdIsMatch = await bcryptjs.compare(values.password, user.password);
+    const pwdIsMatch = await bcryptjs.compare(dto.password, user.contrasena);
 
     if (!pwdIsMatch) {
       throw new UnauthorizedException('Contraseña invalida');
     }
 
-    const payload = { sub: user.id, userName: user.username, role: user.role };
+    const payload = { sub: user.id, userName: user.usuario, role: user.rol };
     const token = await this.jwtService.signAsync(payload);
 
-    const { password, ...result } = user;
+    const { contrasena, ...result } = user;
 
     return { token, result };
   }

@@ -1,4 +1,4 @@
-import { PrinterTarget } from '@/generated/prisma/enums';
+import { DestinoImpresion } from '@/generated/prisma/enums';
 import {
   IsEnum,
   IsNotEmpty,
@@ -25,7 +25,7 @@ export class CreateProductDto {
   @IsNotEmpty()
   price: number;
 
-  @IsEnum(PrinterTarget)
+  @IsEnum(DestinoImpresion)
   @IsNotEmpty()
-  area_impresion: PrinterTarget;
+  area_impresion: DestinoImpresion;
 }

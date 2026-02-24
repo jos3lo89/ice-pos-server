@@ -15,8 +15,8 @@ export class TablesService {
   constructor(private readonly prisma: PrismaService) {}
 
   async create(dto: CreateTableDto) {
-    const tableFound = await this.prisma.tables.findUnique({
-      where: { table_number: dto.table_number },
+    const tableFound = await this.prisma.mesas.findUnique({
+      where: { numero_mesa: dto.numero_mesa },
     });
 
     if (tableFound) {
@@ -24,21 +24,21 @@ export class TablesService {
     }
 
     try {
-      const newTable = await this.prisma.tables.create({
+      const newTable = await this.prisma.mesas.create({
         data: dto,
         include: {
-          floors: true,
+          pisos: true,
         },
       });
 
       return newTable;
     } catch (error) {
       this.logger.error(
-        `Error interno al crear la mesa de numero: ${dto.table_number}`,
+        `Error interno al crear la mesa de numero: ${dto.numero_mesa}`,
       );
 
       throw new InternalServerErrorException(
-        `Error interno al crear la nesa de muero ${dto.table_number}`,
+        `Error interno al crear la nesa de muero ${dto.numero_mesa}`,
       );
     }
   }
@@ -47,21 +47,21 @@ export class TablesService {
     const { page = 1, limit = 5, search } = query;
     const skip = (page - 1) * limit;
 
-    const where: Prisma.tablesWhereInput = search
+    const where: Prisma.mesasWhereInput = search
       ? {
-          OR: [{ table_number: { contains: search, mode: 'insensitive' } }],
+          OR: [{ numero_mesa: { contains: search, mode: 'insensitive' } }],
         }
       : {};
 
     const [total, tables] = await this.prisma.$transaction([
-      this.prisma.tables.count({ where }),
-      this.prisma.tables.findMany({
+      this.prisma.mesas.count({ where }),
+      this.prisma.mesas.findMany({
         where,
         skip,
         take: limit,
-        orderBy: { table_number: 'asc' },
+        orderBy: { numero_mesa: 'asc' },
         include: {
-          floors: true,
+          pisos: true,
         },
       }),
     ]);

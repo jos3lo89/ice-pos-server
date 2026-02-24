@@ -7,9 +7,9 @@ import {
 } from '@nestjs/common';
 import { OpenSessionDto } from './dto/open-session.dto';
 import {
-  CashSessionStatus,
-  PaymentMethod,
-  PaymentStatus,
+  EstadoSesionCaja,
+  EstadoPago,
+  MetodoPago,
 } from '@/generated/prisma/enums';
 import { Decimal } from '@/generated/prisma/internal/prismaNamespace';
 import { CloseSessionDto } from './dto/close-session.dto';
@@ -23,10 +23,10 @@ export class CashSessionsService {
   // ===========================================================================
   async openSession(dto: OpenSessionDto, userId: string) {
     // 1. Verificar si el usuario ya tiene una caja abierta
-    const activeSession = await this.prisma.cash_sessions.findFirst({
+    const activeSession = await this.prisma.sesiones_caja.findFirst({
       where: {
         cajero_id: userId,
-        status: CashSessionStatus.abierta,
+        estado: EstadoSesionCaja.abierta,
       },
     });
 
@@ -37,13 +37,13 @@ export class CashSessionsService {
     }
 
     // 2. Crear la sesión
-    const session = await this.prisma.cash_sessions.create({
+    const session = await this.prisma.sesiones_caja.create({
       data: {
         cajero_id: userId,
-        opening_balance: new Decimal(dto.openingBalance),
-        status: CashSessionStatus.abierta,
-        notes: dto.notes,
-        opened_at: new Date(),
+        saldo_apertura: new Decimal(dto.openingBalance),
+        estado: EstadoSesionCaja.abierta,
+        notas: dto.notes,
+        fecha_apertura: new Date(),
       },
     });
 
@@ -56,13 +56,13 @@ export class CashSessionsService {
   async closeSession(sessionId: string, dto: CloseSessionDto, userId: string) {
     return await this.prisma.$transaction(async (tx) => {
       // 1. Buscar la sesión
-      const session = await tx.cash_sessions.findUnique({
+      const session = await tx.sesiones_caja.findUnique({
         where: { id: sessionId },
       });
 
       if (!session) throw new NotFoundException('Sesión de caja no encontrada');
 
-      if (session.status !== CashSessionStatus.abierta) {
+      if (session.estado !== EstadoSesionCaja.abierta) {
         throw new BadRequestException('Esta sesión de caja ya está cerrada');
       }
 
@@ -72,35 +72,35 @@ export class CashSessionsService {
       }
 
       // 2. Calcular Ventas en EFECTIVO (Solo efectivo afecta el arqueo físico)
-      const salesAggregation = await tx.payments.aggregate({
+      const salesAggregation = await tx.pagos.aggregate({
         where: {
-          cash_session_id: sessionId,
-          method: PaymentMethod.efectivo, // IMPORTANTE: Solo efectivo
-          status: PaymentStatus.pagado,
+          sesion_caja_id: sessionId,
+          metodo: MetodoPago.efectivo, // IMPORTANTE: Solo efectivo
+          estado: EstadoPago.pagado,
         },
         _sum: {
-          amount: true,
+          monto: true,
         },
       });
 
-      const totalSalesCash = salesAggregation._sum.amount || new Decimal(0);
+      const totalSalesCash = salesAggregation._sum.monto || new Decimal(0);
 
       // 3. Calcular Movimientos Manuales (Ingresos/Egresos extra)
       // Si tienes implementado 'cash_transactions', hay que sumarlos.
       // Si no, asume 0 por ahora, pero dejo la lógica lista.
-      const transactions = await tx.cash_transactions.findMany({
-        where: { cash_session_id: sessionId },
+      const transactions = await tx.transacciones_caja.findMany({
+        where: { sesion_caja_id: sessionId },
       });
 
       let totalExtras = new Decimal(0);
       transactions.forEach((t) => {
-        if (t.type === 'ingreso') totalExtras = totalExtras.plus(t.amount);
-        else totalExtras = totalExtras.minus(t.amount); // egreso resta
+        if (t.tipo === 'ingreso') totalExtras = totalExtras.plus(t.monto);
+        else totalExtras = totalExtras.minus(t.monto); // egreso resta
       });
 
       // 4. Calcular Balance Esperado
       // Esperado = Inicio + Ventas Efectivo + Extras
-      const expectedBalance = session.opening_balance
+      const expectedBalance = session.saldo_apertura
         .plus(totalSalesCash)
         .plus(totalExtras);
 
@@ -110,24 +110,24 @@ export class CashSessionsService {
       const difference = actualBalance.minus(expectedBalance);
 
       // 6. Actualizar y Cerrar Sesión
-      const closedSession = await tx.cash_sessions.update({
+      const closedSession = await tx.sesiones_caja.update({
         where: { id: sessionId },
         data: {
-          expected_balance: expectedBalance,
-          actual_balance: actualBalance,
-          difference: difference,
-          status: CashSessionStatus.cerrada,
-          closed_at: new Date(),
-          notes: dto.notes
-            ? `${session.notes || ''} | Cierre: ${dto.notes}`
-            : session.notes,
+          saldo_esperado: expectedBalance,
+          saldo_real: actualBalance,
+          diferencia: difference,
+          estado: EstadoSesionCaja.cerrada,
+          fecha_cierre: new Date(),
+          notas: dto.notes
+            ? `${session.notas || ''} | Cierre: ${dto.notes}`
+            : session.notas,
         },
       });
 
       return {
         ...closedSession,
         details: {
-          opening: session.opening_balance,
+          opening: session.saldo_apertura,
           sales_cash: totalSalesCash,
           manual_transactions: totalExtras,
           expected: expectedBalance,
@@ -143,10 +143,10 @@ export class CashSessionsService {
   // OBTENER ESTADO ACTUAL
   // ===========================================================================
   async getCurrentSession(userId: string) {
-    const session = await this.prisma.cash_sessions.findFirst({
+    const session = await this.prisma.sesiones_caja.findFirst({
       where: {
         cajero_id: userId,
-        status: CashSessionStatus.abierta,
+        estado: EstadoSesionCaja.abierta,
       },
     });
 

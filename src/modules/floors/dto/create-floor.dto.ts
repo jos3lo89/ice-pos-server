@@ -3,9 +3,9 @@ import { IsNotEmpty, IsNumber, IsString } from 'class-validator';
 export class CreateFloorDto {
   @IsString()
   @IsNotEmpty()
-  name: string;
+  nombre: string;
 
   @IsNumber()
   @IsNotEmpty()
-  level: number;
+  nivel: number;
 }
