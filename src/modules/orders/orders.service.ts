@@ -409,4 +409,78 @@ export class OrdersService {
 
     return order;
   }
+
+  // borrar un item antes de envialo a imprimir en la comanda
+  async deleteItem(itemId: string) {
+    try {
+      const itemDeleted = await this.prisma.$transaction(async (tx) => {
+        const item = await this.prisma.items_orden.delete({
+          where: {
+            id: itemId,
+          },
+          include: {
+            ordenes: {
+              select: {
+                id: true,
+              },
+            },
+          },
+        });
+
+        await this.updateOrderTotals(tx, item.ordenes.id);
+
+        return item;
+      });
+
+      return itemDeleted;
+    } catch (error) {
+      this.logger.error(`Error interno al borrar el item con id: ${itemId}`);
+      throw new InternalServerErrorException(
+        'Error inesperado al borrar el item ',
+      );
+    }
+  }
+
+  // borrar orden antes de enviar a la comanda
+  async deleteOrder(orderId: string) {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const order = await tx.ordenes.findUnique({
+          where: { id: orderId },
+          include: { mesa_actual: true },
+        });
+
+        if (!order) {
+          throw new NotFoundException('Orden no econtrada');
+        }
+
+        if (order.estado !== 'pendiente') {
+          throw new BadRequestException(
+            'Solo se pueden eliminar órdenes en estado pendiente',
+          );
+        }
+
+        if (order.mesa_actual) {
+          await tx.mesas.update({
+            where: { id: order.mesa_actual.id },
+            data: {
+              estado: 'disponible',
+              orden_actual_id: null,
+            },
+          });
+        }
+
+        const deletedOrder = await tx.ordenes.delete({
+          where: { id: orderId },
+        });
+
+        return deletedOrder;
+      });
+    } catch (error) {
+      this.logger.error(`Error interno al borrar la orden con id: ${orderId}`);
+      throw new InternalServerErrorException(
+        'Error inesperado al borrar el item ',
+      );
+    }
+  }
 }

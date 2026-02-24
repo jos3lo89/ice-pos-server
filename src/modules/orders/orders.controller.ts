@@ -5,6 +5,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpStatus,
   Param,
@@ -17,6 +18,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { OrdersService } from './orders.service';
 import { RolUsuario } from '@/generated/prisma/enums';
 import { CancelOrderDto } from './dto/cancel-order.dto';
+import { retry } from 'rxjs';
 
 @Controller('orders')
 export class OrdersController {
@@ -79,5 +81,40 @@ export class OrdersController {
     orderId: string,
   ) {
     return this.ordersService.getCurrentOrder(orderId);
+  }
+
+  // borrar un item antes de mandarlo aa la comanda
+
+  @Delete(':id/delete-item')
+  deleteItem(
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        exceptionFactory() {
+          return new BadRequestException('id invalido');
+        },
+      }),
+    )
+    id: string,
+  ) {
+    return this.ordersService.deleteItem(id);
+  }
+
+  // borrar orden antes de enviar a la comanda
+  @Delete(':id/delete-order')
+  deleteOrder(
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        exceptionFactory() {
+          return new BadRequestException('id invalido');
+        },
+      }),
+    )
+    id: string,
+  ) {
+    return this.ordersService.deleteOrder(id);
   }
 }

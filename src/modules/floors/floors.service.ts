@@ -101,6 +101,7 @@ export class FloorsService {
         nivel: true,
         nombre: true,
         mesas: {
+          orderBy: { numero_mesa: 'asc' },
           select: {
             id: true,
             estado: true,
