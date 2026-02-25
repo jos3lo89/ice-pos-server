@@ -414,7 +414,7 @@ export class OrdersService {
   async deleteItem(itemId: string) {
     try {
       const itemDeleted = await this.prisma.$transaction(async (tx) => {
-        const item = await this.prisma.items_orden.delete({
+        const item = await tx.items_orden.delete({
           where: {
             id: itemId,
           },
