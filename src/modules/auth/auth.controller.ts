@@ -37,7 +37,7 @@ export class AuthController {
     res.cookie('iceAuthentication', token, {
       httpOnly: true,
       secure: isProd,
-      sameSite: isProd ? 'strict' : 'lax',
+      sameSite: isProd ? 'none' : 'lax',
       maxAge: this.cookieMaxAge,
     });
 
@@ -53,7 +53,7 @@ export class AuthController {
     res.clearCookie('iceAuthentication', {
       httpOnly: true,
       secure: isProd,
-      sameSite: isProd ? 'strict' : 'lax',
+      sameSite: isProd ? 'none' : 'lax',
     });
 
     return { message: 'Sesión cerrada' };

@@ -91,7 +91,7 @@ model items_orden {
   total_modificadores Decimal @default(0) @db.Decimal(10, 2) // Suma de los modificadores
   total_linea         Decimal @db.Decimal(10, 2) // Calculo final de esta línea
 
-  estado EstadoOrden @default(pendiente)
+  estado EstadoItemOrden @default(pendiente)
   notas  String?
 
   fecha_creacion      DateTime @default(now())
@@ -295,6 +295,13 @@ enum EstadoOrden {
   listo
   servido
   completado
+  cancelado
+}
+
+enum EstadoItemOrden {
+  pendiente
+  preparando
+  listo
   cancelado
 }
 

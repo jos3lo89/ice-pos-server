@@ -1,5 +1,9 @@
 import { PrismaService } from '@/core/prisma/prisma.service';
-import { EstadoMesa, EstadoOrden } from '@/generated/prisma/enums';
+import {
+  EstadoItemOrden,
+  EstadoMesa,
+  EstadoOrden,
+} from '@/generated/prisma/enums';
 import {
   BadRequestException,
   ConflictException,
@@ -13,6 +17,7 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { Prisma } from '@/generated/prisma/client';
 import { AddOrderItemDto } from './dto/add-order-items.dto';
 import { Decimal } from '@/generated/prisma/internal/prismaNamespace';
+import { SendComandDto } from './dto/send-comand.dto';
 
 @Injectable()
 export class OrdersService {
@@ -414,7 +419,7 @@ export class OrdersService {
   async deleteItem(itemId: string) {
     try {
       const itemDeleted = await this.prisma.$transaction(async (tx) => {
-        const item = await this.prisma.items_orden.delete({
+        const item = await tx.items_orden.delete({
           where: {
             id: itemId,
           },
@@ -480,6 +485,117 @@ export class OrdersService {
       this.logger.error(`Error interno al borrar la orden con id: ${orderId}`);
       throw new InternalServerErrorException(
         'Error inesperado al borrar el item ',
+      );
+    }
+  }
+
+  // send comand
+  async sendComand(dto: SendComandDto) {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        const order = await tx.ordenes.findUnique({
+          where: { id: dto.orderId },
+          include: {
+            items_orden: {
+              where: {
+                id: { in: dto.itemsId },
+              },
+            },
+          },
+        });
+
+        if (!order) {
+          throw new NotFoundException('Order no encontrada');
+        }
+
+        const estadosNoPermitidos: EstadoOrden[] = [
+          EstadoOrden.completado,
+          EstadoOrden.cancelado,
+        ];
+
+        if (estadosNoPermitidos.includes(order.estado)) {
+          throw new BadRequestException(
+            `No se puede comandar una orden en estado: ${order.estado}`,
+          );
+        }
+
+        const foundItemIds = order.items_orden.map((item) => item.id);
+
+        const invalidItems = dto.itemsId.filter(
+          (id) => !foundItemIds.includes(id),
+        );
+
+        if (invalidItems.length > 0) {
+          throw new BadRequestException(
+            `Los siguientes items no pertenecen a esta orden: ${invalidItems.join(', ')}`,
+          );
+        }
+
+        const itemsNoComandables = order.items_orden.filter(
+          (item) => item.estado !== EstadoItemOrden.pendiente,
+        );
+
+        if (itemsNoComandables.length > 0) {
+          throw new BadRequestException(
+            `Los siguientes items ya fueron comandados o cancelados: ${itemsNoComandables.map((i) => i.nombre_producto).join(', ')}`,
+          );
+        }
+
+        await tx.items_orden.updateMany({
+          where: {
+            id: { in: dto.itemsId },
+            orden_id: dto.orderId,
+            estado: EstadoItemOrden.pendiente,
+          },
+          data: {
+            estado: EstadoItemOrden.preparando,
+          },
+        });
+
+        const itemsPendientes = await tx.items_orden.count({
+          where: {
+            orden_id: dto.orderId,
+            estado: EstadoItemOrden.pendiente,
+          },
+        });
+
+        // TODO: verificar esta funcionalidad
+
+        // Solo cambia a 'preparando' si no quedan items pendientes
+        // Si aún hay items pendientes, la orden sigue en su estado actual
+        const nuevoEstadoOrden =
+          itemsPendientes === 0 ? EstadoOrden.preparando : order.estado;
+
+        const updatedOrder = await tx.ordenes.update({
+          where: { id: dto.orderId },
+          data: { estado: nuevoEstadoOrden },
+          include: {
+            items_orden: {
+              include: {
+                modificadores_item_orden: true,
+              },
+            },
+            mesa_historial: {
+              select: {
+                id: true,
+                numero_mesa: true,
+                estado: true,
+              },
+            },
+          },
+        });
+
+        return updatedOrder;
+      });
+    } catch (error) {
+      this.logger.error('Error al enviar a la comanda');
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Error inesperado al enviar a la comanda',
       );
     }
   }
