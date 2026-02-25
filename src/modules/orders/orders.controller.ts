@@ -18,8 +18,8 @@ import { CreateOrderDto } from './dto/create-order.dto';
 import { OrdersService } from './orders.service';
 import { RolUsuario } from '@/generated/prisma/enums';
 import { CancelOrderDto } from './dto/cancel-order.dto';
-import { retry } from 'rxjs';
 import { SendComandDto } from './dto/send-comand.dto';
+import { CancelOrderItemDto } from './dto/cancel-order-item.dto';
 
 @Controller('orders')
 export class OrdersController {
@@ -50,7 +50,7 @@ export class OrdersController {
   }
 
   @Patch(':id/cancel')
-  @Auth(RolUsuario.admin, RolUsuario.cajero)
+  @Auth(RolUsuario.admin, RolUsuario.cajero, RolUsuario.mesero)
   async cancelOrder(
     @Param(
       'id',
@@ -120,8 +120,38 @@ export class OrdersController {
   }
 
   // enviar a la comanda
-  @Post('send-comanda')
-  sendComand(@Body() body: SendComandDto) {
-    return this.ordersService.sendComand(body);
+  @Post(':id/send-comand')
+  sendComand(
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        exceptionFactory() {
+          return new BadRequestException('Id invalido');
+        },
+      }),
+    )
+    orderId: string,
+    @Body() body: SendComandDto,
+  ) {
+    return this.ordersService.sendComand(orderId, body);
+  }
+
+  // cnacelar items de la orden
+  @Patch(':id/cancel-item')
+  canelOrderItem(
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        exceptionFactory() {
+          return new BadRequestException('id invalido');
+        },
+      }),
+    )
+    id: string,
+    @Body() body: CancelOrderItemDto,
+  ) {
+    return this.ordersService.cancelOrderItem(id, body);
   }
 }
