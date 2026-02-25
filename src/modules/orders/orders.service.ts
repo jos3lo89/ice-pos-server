@@ -315,7 +315,7 @@ export class OrdersService {
 
         // 3. Cancelar todos los items
         await tx.items_orden.updateMany({
-          where: { orden_id: orderId },
+          where: { orden_id: orderId, estado: { notIn: ['cancelado'] } },
           data: { estado: EstadoOrden.cancelado },
         });
 
