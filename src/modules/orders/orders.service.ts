@@ -18,6 +18,7 @@ import { Prisma } from '@/generated/prisma/client';
 import { AddOrderItemDto } from './dto/add-order-items.dto';
 import { Decimal } from '@/generated/prisma/internal/prismaNamespace';
 import { SendComandDto } from './dto/send-comand.dto';
+import { CancelOrderItemDto } from './dto/cancel-order-item.dto';
 
 @Injectable()
 export class OrdersService {
@@ -275,61 +276,74 @@ export class OrdersService {
   }
 
   async cancelOrder(orderId: string, reason: string) {
-    return await this.prisma.$transaction(async (tx) => {
-      // 1. Buscar Orden
-      const order = await tx.ordenes.findUnique({
-        where: { id: orderId },
-      });
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // 1. Buscar Orden
+        const order = await tx.ordenes.findUnique({
+          where: { id: orderId },
+        });
 
-      if (!order) throw new NotFoundException('Orden no encontrada');
+        if (!order) throw new NotFoundException('Orden no encontrada');
 
-      // Validaciones de negocio robustas
-      if (order.estado === 'completado') {
-        throw new ConflictException(
-          'No se puede cancelar una orden que ya fue completada y pagada',
-        );
-      }
+        // Validaciones de negocio robustas
+        if (order.estado === 'completado') {
+          throw new ConflictException(
+            'No se puede cancelar una orden que ya fue completada y pagada',
+          );
+        }
 
-      if (order.estado === 'cancelado') {
-        throw new ConflictException('La orden ya está cancelada');
-      }
+        if (order.estado === 'cancelado') {
+          throw new ConflictException('La orden ya está cancelada');
+        }
 
-      // Validar si ya hay pagos realizados (Opcional: depende de tu política)
-      // Si ya pagaron algo, quizás requiera una nota de crédito en lugar de cancelación simple.
-      if (order.monto_pagado && order.monto_pagado.toNumber() > 0) {
-        throw new ConflictException(
-          'La orden tiene pagos registrados. Debe anular los pagos primero.',
-        );
-      }
+        // Validar si ya hay pagos realizados (Opcional: depende de tu política)
+        // Si ya pagaron algo, quizás requiera una nota de crédito en lugar de cancelación simple.
+        if (order.monto_pagado && order.monto_pagado.toNumber() > 0) {
+          throw new ConflictException(
+            'La orden tiene pagos registrados. Debe anular los pagos primero.',
+          );
+        }
 
-      // 2. Actualizar Estado de la Orden
-      const cancelledOrder = await tx.ordenes.update({
-        where: { id: orderId },
-        data: {
-          estado: EstadoOrden.cancelado,
-          motivo_cancelacion: reason,
-        },
-      });
-
-      // 3. Cancelar todos los items
-      await tx.items_orden.updateMany({
-        where: { orden_id: orderId },
-        data: { estado: EstadoOrden.cancelado },
-      });
-
-      // 4. Liberar la Mesa
-      if (order.mesa_id) {
-        await tx.mesas.update({
-          where: { id: order.mesa_id },
+        // 2. Actualizar Estado de la Orden
+        const cancelledOrder = await tx.ordenes.update({
+          where: { id: orderId },
           data: {
-            estado: EstadoMesa.disponible,
-            orden_actual_id: null,
+            estado: EstadoOrden.cancelado,
+            motivo_cancelacion: reason,
           },
         });
-      }
 
-      return cancelledOrder;
-    });
+        // 3. Cancelar todos los items
+        await tx.items_orden.updateMany({
+          where: { orden_id: orderId },
+          data: { estado: EstadoOrden.cancelado },
+        });
+
+        // 4. Liberar la Mesa
+        if (order.mesa_id) {
+          await tx.mesas.update({
+            where: { id: order.mesa_id },
+            data: {
+              estado: EstadoMesa.disponible,
+              orden_actual_id: null,
+            },
+          });
+        }
+
+        // TODO: analizar se se debe recalcular algo aqiu
+
+        return cancelledOrder;
+      });
+    } catch (error) {
+      this.logger.error('error al cancelar la orden', error);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      throw new InternalServerErrorException(
+        'Error inesperado al cancelar la orden',
+      );
+    }
   }
 
   // utils
@@ -490,11 +504,11 @@ export class OrdersService {
   }
 
   // send comand
-  async sendComand(dto: SendComandDto) {
+  async sendComand(orderId: string, dto: SendComandDto) {
     try {
       return await this.prisma.$transaction(async (tx) => {
         const order = await tx.ordenes.findUnique({
-          where: { id: dto.orderId },
+          where: { id: orderId },
           include: {
             items_orden: {
               where: {
@@ -544,7 +558,7 @@ export class OrdersService {
         await tx.items_orden.updateMany({
           where: {
             id: { in: dto.itemsId },
-            orden_id: dto.orderId,
+            orden_id: orderId,
             estado: EstadoItemOrden.pendiente,
           },
           data: {
@@ -554,7 +568,7 @@ export class OrdersService {
 
         const itemsPendientes = await tx.items_orden.count({
           where: {
-            orden_id: dto.orderId,
+            orden_id: orderId,
             estado: EstadoItemOrden.pendiente,
           },
         });
@@ -567,7 +581,7 @@ export class OrdersService {
           itemsPendientes === 0 ? EstadoOrden.preparando : order.estado;
 
         const updatedOrder = await tx.ordenes.update({
-          where: { id: dto.orderId },
+          where: { id: orderId },
           data: { estado: nuevoEstadoOrden },
           include: {
             items_orden: {
@@ -596,6 +610,49 @@ export class OrdersService {
 
       throw new InternalServerErrorException(
         'Error inesperado al enviar a la comanda',
+      );
+    }
+  }
+
+  // cancelar order item
+  async cancelOrderItem(orderId: string, dto: CancelOrderItemDto) {
+    try {
+      return await this.prisma.$transaction(async (tx) => {
+        // validar que ela orden existe
+        const order = await tx.ordenes.findUnique({ where: { id: orderId } });
+        if (!order) throw new NotFoundException('orden no encontrada');
+
+        // validar que  el item existe
+        const item = await tx.items_orden.findUnique({
+          where: { id: dto.itemId, orden_id: orderId },
+        });
+
+        if (!item) throw new NotFoundException('Item no econtrada');
+        // verificar que  el item este en un estado diferente a cancelado
+        if (item.estado === EstadoItemOrden.cancelado) {
+          throw new BadRequestException('El item ya fue cancelado');
+        }
+        // acutlizar el estado a cancelado
+        const newItem = await tx.items_orden.update({
+          where: { id: dto.itemId, orden_id: orderId },
+          data: { estado: EstadoItemOrden.cancelado },
+        });
+        // acutlizar los montos de la orden
+
+        await this.updateOrderTotals(tx, orderId);
+
+        return newItem;
+      });
+    } catch (error) {
+      this.logger.error('Error interno al cancelar el item de la orden');
+      console.log(error);
+
+      if (error instanceof HttpException) {
+        throw error;
+      }
+
+      throw new InternalServerErrorException(
+        'Error inesperado al cancelar el item',
       );
     }
   }
