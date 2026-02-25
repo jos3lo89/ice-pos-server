@@ -19,6 +19,7 @@ import { OrdersService } from './orders.service';
 import { RolUsuario } from '@/generated/prisma/enums';
 import { CancelOrderDto } from './dto/cancel-order.dto';
 import { retry } from 'rxjs';
+import { SendComandDto } from './dto/send-comand.dto';
 
 @Controller('orders')
 export class OrdersController {
@@ -116,5 +117,11 @@ export class OrdersController {
     id: string,
   ) {
     return this.ordersService.deleteOrder(id);
+  }
+
+  // enviar a la comanda
+  @Post('send-comanda')
+  sendComand(@Body() body: SendComandDto) {
+    return this.ordersService.sendComand(body);
   }
 }
