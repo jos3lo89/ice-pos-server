@@ -1,9 +1,11 @@
+import { Transform } from 'class-transformer';
 import { IsNumber, IsOptional, IsString, Min } from 'class-validator';
 
 export class CloseSessionDto {
+  @Transform(({ value }) => Number(value))
   @IsNumber({ maxDecimalPlaces: 2 })
   @Min(0)
-  actualBalance: number; // Lo que el cajero contó físicamente (billetes y monedas)
+  actualBalance: number;
 
   @IsString()
   @IsOptional()

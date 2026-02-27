@@ -7,149 +7,189 @@ import {
 } from '@nestjs/common';
 import { CreatePaymentDto } from './dto/create-payment.dto';
 import {
+  EstadoItemOrden,
   EstadoMesa,
   EstadoOrden,
   EstadoPago,
+  MetodoPago,
   Prisma,
+  TipoTransaccionCaja,
 } from '@/generated/prisma/client';
 import { Decimal } from '@/generated/prisma/internal/prismaNamespace';
+import { IncomingMessage } from 'http';
 
 @Injectable()
 export class PaymentsService {
   constructor(private readonly prisma: PrismaService) {}
 
-  async createPayment(dto: CreatePaymentDto, cajeroId: string) {
+  async createPayment(
+    dto: CreatePaymentDto,
+    cajeroId: string,
+    sesionId: string,
+  ) {
     return await this.prisma.$transaction(async (tx) => {
-      // 1. Validar Sesión de Caja
-      const session = await tx.sesiones_caja.findUnique({
-        where: { id: dto.cashSessionId },
-      });
-
-      if (!session) throw new NotFoundException('Sesión de caja no encontrada');
-      if (session.estado !== 'abierta') {
-        throw new ConflictException(
-          'La sesión de caja está cerrada o es inválida',
-        );
-      }
-      if (session.cajero_id !== cajeroId) {
-        throw new ConflictException(
-          'La sesión de caja pertenece a otro usuario',
-        );
-      }
-
-      // 2. Validar Orden
+      // 1. Validar orden
       const order = await tx.ordenes.findUnique({
         where: { id: dto.orderId },
-      });
-
-      if (!order) throw new NotFoundException('Orden no encontrada');
-      if (order.estado === 'cancelado') {
-        throw new ConflictException('No se puede cobrar una orden cancelada');
-      }
-      if (order.estado === 'completado') {
-        throw new ConflictException(
-          'La orden ya ha sido pagada en su totalidad',
-        );
-      }
-
-      // 3. Generar Número de Pago (PAY-001...)
-      const paymentNumber = await this.generatePaymentNumber(tx);
-
-      // 4. Crear Cabecera del Pago (Estado pendiente temporalmente)
-      const payment = await tx.pagos.create({
-        data: {
-          numero_pago: paymentNumber,
-          orden_id: dto.orderId,
-          cajero_id: cajeroId,
-          sesion_caja_id: dto.cashSessionId,
-          metodo: dto.method,
-          monto: 0, // Se calcula abajo
-          estado: EstadoPago.pendiente,
-          id_externo: dto.transactionId,
-          notas: dto.notes,
+        include: {
+          items_orden: {
+            where: {
+              id: { in: dto.lines.map((l) => l.orderItemId) },
+            },
+          },
         },
       });
 
-      let totalPaymentAmount = new Decimal(0);
+      if (!order) throw new NotFoundException('Orden no encontrada');
+      if (order.estado === EstadoOrden.cancelado) {
+        throw new ConflictException('No se puede cobrar una orden cancelada');
+      }
+      if (order.estado === EstadoOrden.completado) {
+        throw new ConflictException('La orden ya está completamente pagada');
+      }
 
-      // 5. Procesar Líneas (Split Payment Logic)
+      // 2. Calcular el total de los items seleccionados ANTES de crear el pago
+      //    para poder validar el monto recibido en efectivo
+      let totalAPagar = new Decimal(0);
+
+      for (const item of order.items_orden) {
+        totalAPagar = totalAPagar.plus(item.total_linea);
+      }
+
+      // 3. Validar lógica de efectivo
+      let montoRecibido: Decimal | null = null;
+      let vuelto: Decimal | null = null;
+
+      if (dto.method === MetodoPago.efectivo) {
+        if (!dto.montoRecibido) {
+          throw new BadRequestException(
+            'Debes ingresar el monto recibido del cliente para pagos en efectivo',
+          );
+        }
+
+        montoRecibido = new Decimal(dto.montoRecibido);
+
+        if (montoRecibido.lessThan(totalAPagar)) {
+          throw new BadRequestException(
+            `El monto recibido S/${montoRecibido} es menor al total a pagar S/${totalAPagar}`,
+          );
+        }
+
+        vuelto = montoRecibido.minus(totalAPagar);
+      }
+
+      // 4. Generar número de pago
+      const numeroPago = await this.generatePaymentNumber(tx);
+
+      // 5. Crear Cabecera del Pago
+      const payment = await tx.pagos.create({
+        data: {
+          numero_pago: numeroPago,
+          orden_id: dto.orderId,
+          cajero_id: cajeroId,
+          sesion_caja_id: sesionId,
+          cliente_id: dto.clienteId,
+          metodo: dto.method,
+          tipo_documento: dto.tipoDocumento,
+          monto: totalAPagar,
+          monto_recibido: dto.montoRecibido,
+          vuelto: vuelto,
+          estado: EstadoPago.pagado,
+          id_externo: dto.transactionId ?? null,
+          notas: dto.notes ?? null,
+        },
+      });
+
+      // 6 procesar cada linia de pago
       for (const line of dto.lines) {
-        const item = await tx.items_orden.findUnique({
-          where: { id: line.orderItemId },
-        });
-
-        if (!item || item.orden_id !== dto.orderId) {
+        const item = order.items_orden.find((i) => i.id === line.orderItemId);
+        if (!item) {
           throw new BadRequestException(
             `El item ${line.orderItemId} no pertenece a esta orden`,
           );
         }
 
-        // 5a. Calcular cuánto ya se ha pagado de este item
-        const paidAggregation = await tx.detalles_pago.aggregate({
-          where: {
-            item_orden_id: line.orderItemId,
-            pagos: { estado: EstadoPago.pagado }, // Solo contar pagos exitosos
-          },
-          _sum: { cantidad_pagada: true },
-        });
-
-        const alreadyPaidQty = paidAggregation._sum.cantidad_pagada || 0;
-        const currentQty = line.quantity;
-
-        // 5b. Validar Sobrepago (Overpayment check)
-        if (alreadyPaidQty + currentQty > item.cantidad) {
-          throw new ConflictException(
-            `Estás intentando pagar ${currentQty} unidades del item "${item.producto_id}" (o variante), pero solo quedan ${item.cantidad - alreadyPaidQty} pendientes.`,
+        if (item.estado === EstadoItemOrden.cancelado) {
+          throw new BadRequestException(
+            `El item "${item.nombre_producto}" está cancelado`,
           );
         }
 
-        const lineAmount = new Decimal(line.amount);
-        totalPaymentAmount = totalPaymentAmount.plus(lineAmount);
+        const yaFuePagado = await tx.detalles_pago.findFirst({
+          where: {
+            item_orden_id: line.orderItemId,
+            pagos: { estado: EstadoPago.pagado },
+          },
+        });
 
-        // 5c. Crear Detalle del Pago
+        if (yaFuePagado) {
+          throw new ConflictException(
+            `El item "${item.nombre_producto}" ya fue pagado`,
+          );
+        }
+
         await tx.detalles_pago.create({
           data: {
             pago_id: payment.id,
             item_orden_id: line.orderItemId,
-            cantidad_pagada: currentQty,
-            monto_pagado: lineAmount,
+            cantidad_pagada: item.cantidad,
+            monto_pagado: item.total_linea,
           },
         });
       }
 
-      // 6. Actualizar Cabecera del Pago a PAGADO
-      const completedPayment = await tx.pagos.update({
-        where: { id: payment.id },
-        data: {
-          monto: totalPaymentAmount,
-          estado: EstadoPago.pagado,
-        },
+      // 7. Actualizar totales de la orden
+      const orderCompleted = await this.refreshAndCheckOrderCompletion(
+        tx,
+        dto.orderId,
+      );
+
+      // 8. Actualizar sesión de caja
+      await this.updateCashSession(tx, sesionId, cajeroId, payment.id, {
+        metodo: dto.method,
+        monto: totalAPagar,
+        numeroOrden: order.numero_orden,
       });
 
-      // 7. ACTUALIZAR TOTALES DE LA ORDEN Y VERIFICAR CIERRE
-      // (Esta es la lógica de 'refresh_order_totals' integrada en la transacción)
-      await this.refreshAndCheckOrderCompletion(tx, dto.orderId);
-
-      return completedPayment;
+      return {
+        pago: {
+          id: payment.id,
+          numero_pago: payment.numero_pago,
+          monto: Number(totalAPagar),
+          monto_recibido: montoRecibido ? Number(montoRecibido) : null,
+          vuelto: vuelto ? Number(vuelto) : null,
+          metodo: payment.metodo,
+          tipo_documento: payment.tipo_documento,
+          fecha: payment.fecha_creacion,
+        },
+        orden_completada: orderCompleted,
+      };
     });
   }
-  // Lógica privada para replicar 'generate_payment_number'
+
   private async generatePaymentNumber(
     tx: Prisma.TransactionClient,
   ): Promise<string> {
-    const prefix = 'PAY-';
-    const lastPayment = await tx.pagos.findFirst({
+    const prefix = 'REC-';
+
+    const totalPagos = await tx.pagos.count({
       where: { numero_pago: { startsWith: prefix } },
-      orderBy: { fecha_creacion: 'desc' },
     });
 
-    if (!lastPayment) return `${prefix}001`;
+    const nextNum = totalPagos + 1;
+    const numero = `${prefix}${nextNum.toString().padStart(6, '0')}`;
 
-    const numberPart = lastPayment.numero_pago.replace(prefix, '');
-    const nextNum = parseInt(numberPart, 10) + 1;
-    return `${prefix}${nextNum.toString().padStart(3, '0')}`;
+    const existe = await tx.pagos.findUnique({
+      where: { numero_pago: numero },
+    });
+
+    if (existe) {
+      return `${prefix}${Date.now()}`;
+    }
+
+    return numero;
   }
-  // Lógica privada para replicar 'refresh_order_totals' y cerrar orden
+
   private async refreshAndCheckOrderCompletion(
     tx: Prisma.TransactionClient,
     orderId: string,
@@ -204,5 +244,162 @@ export class PaymentsService {
         });
       }
     }
+  }
+
+  // utils
+  private async updateCashSession(
+    tx: Prisma.TransactionClient,
+    sesionId: string,
+    cajeroId: string,
+    pagoId: string,
+    data: { metodo: MetodoPago; monto: Decimal; numeroOrden: string },
+  ) {
+    switch (data.metodo) {
+      case MetodoPago.efectivo:
+        await tx.sesiones_caja.update({
+          where: { id: sesionId },
+          data: { saldo_esperado: { increment: data.monto } },
+        });
+        await tx.transacciones_caja.create({
+          data: {
+            sesion_caja_id: sesionId,
+            cajero_id: cajeroId,
+            pago_id: pagoId,
+            tipo: TipoTransaccionCaja.ingreso_venta,
+            monto: data.monto,
+            descripcion: `Venta efectivo orden #${data.numeroOrden}`,
+          },
+        });
+        break;
+
+      case MetodoPago.yape:
+        await tx.sesiones_caja.update({
+          where: { id: sesionId },
+          data: { total_yape: { increment: data.monto } },
+        });
+        break;
+
+      case MetodoPago.plin:
+        await tx.sesiones_caja.update({
+          where: { id: sesionId },
+          data: { total_plin: { increment: data.monto } },
+        });
+        break;
+
+      case MetodoPago.tarjeta:
+        await tx.sesiones_caja.update({
+          where: { id: sesionId },
+          data: { total_tarjeta: { increment: data.monto } },
+        });
+        break;
+    }
+  }
+
+  async getTicket(paymentId: string) {
+    const pago = await this.prisma.pagos.findUnique({
+      where: { id: paymentId },
+      include: {
+        ordenes: {
+          select: {
+            numero_orden: true,
+            tipo_orden: true,
+            notas: true,
+            mesa_actual: { select: { numero_mesa: true } },
+            usuarios: { select: { nombre_completo: true } },
+          },
+        },
+        clientes: {
+          select: {
+            razon_social: true,
+            numero_documento: true,
+            tipo_documento: true,
+            direccion: true,
+          },
+        },
+        usuarios: {
+          select: {
+            nombre_completo: true,
+          },
+        },
+        detalles_pago: {
+          include: {
+            items_orden: {
+              select: {
+                nombre_producto: true,
+                nombre_variante: true,
+                cantidad: true,
+                precio_unitario: true,
+                total_modificadores: true,
+                total_linea: true,
+                modificadores_item_orden: {
+                  select: {
+                    nombre_modificador: true,
+                    precio_adicional: true,
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!pago) throw new NotFoundException('Pago no encontrado');
+
+    return {
+      // datos del negocio
+      negocio: {
+        nombre: 'ice mankora',
+        ruc: '20123456789',
+        direccion: 'Av. Principal 123',
+      },
+      // datos del comprobante
+      comprobante: {
+        numero_pago: pago.numero_pago,
+        tipo_documento: pago.tipo_documento,
+        fecha: pago.fecha_creacion,
+        metodo: pago.metodo,
+      },
+      // datos de la orden
+      orden: {
+        numero_orden: pago.ordenes.numero_orden,
+        tipo_orden: pago.ordenes.tipo_orden,
+        mesa: pago.ordenes.mesa_actual?.numero_mesa ?? null,
+        mesero: pago.ordenes.usuarios?.nombre_completo ?? null,
+        notas: pago.ordenes.notas ?? null,
+      },
+      // Cliente
+      cliente: pago.clientes
+        ? {
+            razon_social: pago.clientes.razon_social,
+            numero_documento: pago.clientes.numero_documento,
+            tipo_documento: pago.clientes.tipo_documento,
+            direccion: pago.clientes.direccion ?? null,
+          }
+        : null,
+
+      // Items pagados en este pago
+      items: pago.detalles_pago.map((d) => ({
+        nombre_producto: d.items_orden.nombre_producto,
+        nombre_variante: d.items_orden.nombre_variante ?? null,
+        cantidad: d.cantidad_pagada,
+        precio_unitario: d.items_orden.precio_unitario.toNumber(),
+        total_modificadores: d.items_orden.total_modificadores.toNumber(),
+        total_linea: d.monto_pagado.toNumber(),
+        modificadores: d.items_orden.modificadores_item_orden.map((m) => ({
+          nombre: m.nombre_modificador,
+          precio: m.precio_adicional.toNumber(),
+        })),
+      })),
+      // Totales
+      totales: {
+        subtotal: pago.monto.toNumber(),
+        monto_recibido: pago.monto_recibido?.toNumber() ?? null, // null si no es efectivo
+        vuelto: pago.vuelto?.toNumber() ?? null, // null si no es efectivo
+      },
+
+      // cajero
+      cajero: pago.usuarios?.nombre_completo ?? null,
+    };
   }
 }

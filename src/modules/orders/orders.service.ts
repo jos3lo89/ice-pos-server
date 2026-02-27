@@ -3,6 +3,7 @@ import {
   EstadoItemOrden,
   EstadoMesa,
   EstadoOrden,
+  EstadoPago,
 } from '@/generated/prisma/enums';
 import {
   BadRequestException,
@@ -655,5 +656,105 @@ export class OrdersService {
         'Error inesperado al cancelar el item',
       );
     }
+  }
+
+  // get order detail for payment
+  async orderDetailPayment(orderId: string) {
+    const order = await this.prisma.ordenes.findUnique({
+      where: {
+        id: orderId,
+      },
+      include: {
+        mesa_historial: {
+          include: {
+            pisos: true,
+          },
+        },
+        _count: {
+          select: {
+            items_orden: true,
+            pagos: true,
+          },
+        },
+        pagos: {
+          where: { estado: EstadoPago.pagado },
+          orderBy: { fecha_creacion: 'asc' },
+          select: {
+            id: true,
+            numero_pago: true,
+            monto: true,
+            vuelto: true,
+            monto_recibido: true,
+            metodo: true,
+            tipo_documento: true,
+            fecha_creacion: true,
+          },
+        },
+        items_orden: {
+          include: {
+            modificadores_item_orden: true,
+            detalles_pago: {
+              include: {
+                pagos: { select: { estado: true } },
+              },
+            },
+          },
+        },
+        usuarios: { select: { nombre_completo: true } },
+      },
+    });
+
+    if (!order) throw new NotFoundException('Orden no encontrada');
+
+    const itemsConEstadoPago = order.items_orden.map((item) => {
+      const cantidadPagada = item.detalles_pago
+        .filter((d) => d.pagos?.estado === EstadoPago.pagado)
+        .reduce((sum, d) => sum + d.cantidad_pagada, 0);
+
+      const estaPagado = cantidadPagada >= item.cantidad;
+
+      return {
+        id: item.id,
+        nombre_producto: item.nombre_producto,
+        nombre_variante: item.nombre_variante,
+        precio_variante: item.precio_variante.toNumber(),
+        cantidad: item.cantidad,
+        cantidad_pagada: cantidadPagada,
+        cantidad_pendiente: item.cantidad - cantidadPagada,
+        precio_unitario: item.precio_unitario.toNumber(),
+        total_modificadores: item.total_modificadores.toNumber(),
+        total_linea: item.total_linea.toNumber(),
+        esta_pagado: estaPagado,
+        modificadores: item.modificadores_item_orden.map((m) => ({
+          nombre: m.nombre_modificador,
+          precio: m.precio_adicional.toNumber(),
+        })),
+      };
+    });
+
+    const totalOrden = order.total.toNumber();
+    const totalPagado = order.monto_pagado.toNumber();
+    const totalPendiente = totalOrden - totalPagado;
+
+    return {
+      orden: {
+        id: order.id,
+        numero_order: order.numero_orden,
+        estado: order.estado,
+        tipo_order: order.tipo_orden,
+        mesero: order.usuarios?.nombre_completo ?? null,
+        mesa: order.mesa_historial?.numero_mesa ?? null,
+        piso: order.mesa_historial?.pisos?.nivel ?? null,
+        notas: order.notas,
+      },
+      items: itemsConEstadoPago,
+      resumen: {
+        total_orden: totalOrden,
+        total_pagado: totalPagado,
+        total_pendiente: totalPendiente,
+        esta_pagado_completo: totalPendiente <= 0,
+      },
+      historial_pagos: order.pagos, // Para reimprimir tickets
+    };
   }
 }

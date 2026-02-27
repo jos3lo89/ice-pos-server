@@ -154,4 +154,21 @@ export class OrdersController {
   ) {
     return this.ordersService.cancelOrderItem(id, body);
   }
+
+  // get order detail for payment
+  @Get(':id/detail')
+  getOrderDetailPayment(
+    @Param(
+      'id',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        exceptionFactory() {
+          return new BadRequestException('id invalido');
+        },
+      }),
+    )
+    id: string,
+  ) {
+    return this.ordersService.orderDetailPayment(id);
+  }
 }

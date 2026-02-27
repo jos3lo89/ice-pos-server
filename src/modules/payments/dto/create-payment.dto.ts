@@ -1,31 +1,22 @@
-import { MetodoPago } from '@/generated/prisma/enums';
-import { Type } from 'class-transformer';
+import { MetodoPago, TipoDocumento } from '@/generated/prisma/enums';
+import { Transform, Type } from 'class-transformer';
 import {
   IsArray,
   IsEnum,
-  IsInt,
   IsNotEmpty,
   IsNumber,
   IsOptional,
   IsPositive,
   IsString,
   IsUUID,
-  Min,
   ValidateNested,
 } from 'class-validator';
+import { number } from 'joi';
 
 export class PaymentLineDto {
   @IsUUID('4')
   @IsNotEmpty()
   orderItemId: string;
-
-  @IsInt()
-  @Min(1)
-  quantity: number;
-
-  @IsNumber({ maxDecimalPlaces: 2 })
-  @IsPositive()
-  amount: number; // El monto que se está pagando por esa cantidad
 }
 
 export class CreatePaymentDto {
@@ -33,22 +24,32 @@ export class CreatePaymentDto {
   @IsNotEmpty()
   orderId: string;
 
-  @IsUUID('4')
-  @IsNotEmpty()
-  cashSessionId: string; // Obligatorio: debe haber una caja abierta
-
   @IsEnum(MetodoPago)
   @IsNotEmpty()
   method: MetodoPago;
+
+  @IsEnum(TipoDocumento)
+  @IsOptional()
+  tipoDocumento: TipoDocumento;
 
   @IsArray()
   @ValidateNested({ each: true })
   @Type(() => PaymentLineDto)
   lines: PaymentLineDto[];
 
+  @IsOptional()
+  @Transform(({ value }) => Number(value))
+  @IsNumber({ maxDecimalPlaces: 2 })
+  @IsPositive()
+  montoRecibido?: number;
+
   @IsString()
   @IsOptional()
-  transactionId?: string; // Para pagos con tarjeta (código de operación)
+  transactionId?: string;
+
+  @IsString()
+  @IsOptional()
+  clienteId: string;
 
   @IsString()
   @IsOptional()
