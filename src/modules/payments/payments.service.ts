@@ -16,7 +16,6 @@ import {
   TipoTransaccionCaja,
 } from '@/generated/prisma/client';
 import { Decimal } from '@/generated/prisma/internal/prismaNamespace';
-import { IncomingMessage } from 'http';
 
 @Injectable()
 export class PaymentsService {
@@ -155,9 +154,9 @@ export class PaymentsService {
         pago: {
           id: payment.id,
           numero_pago: payment.numero_pago,
-          monto: Number(totalAPagar),
-          monto_recibido: montoRecibido ? Number(montoRecibido) : null,
-          vuelto: vuelto ? Number(vuelto) : null,
+          monto: totalAPagar.toNumber(),
+          monto_recibido: montoRecibido ? montoRecibido.toNumber() : null,
+          vuelto: vuelto ? vuelto.toNumber() : null,
           metodo: payment.metodo,
           tipo_documento: payment.tipo_documento,
           fecha: payment.fecha_creacion,
@@ -211,19 +210,17 @@ export class PaymentsService {
     // C. Actualizar Orden (Montos acumulados)
     await tx.ordenes.update({
       where: { id: orderId },
-      data: {
-        monto_pagado: amountPaid,
-        // Nota: subtotal e IGV ya se calculan al agregar items, pero podrías recalcularlos aquí si deseas
-      },
+      data: { monto_pagado: amountPaid },
     });
 
     // D. Lógica de Cierre Automático (Si Pagado >= Total)
     // Usamos una pequeña tolerancia para errores de decimales mínimos si fuera necesario,
     // pero con Decimal.js la comparación directa suele funcionar bien.
-    if (
-      amountPaid.greaterThanOrEqualTo(totalExpected) &&
-      totalExpected.greaterThan(0)
-    ) {
+    const isCompleted =
+      totalExpected.greaterThan(0) &&
+      amountPaid.greaterThanOrEqualTo(totalExpected);
+
+    if (isCompleted) {
       // 1. Marcar Orden como Completada
       const closedOrder = await tx.ordenes.update({
         where: { id: orderId },
@@ -244,6 +241,8 @@ export class PaymentsService {
         });
       }
     }
+
+    return isCompleted;
   }
 
   // utils

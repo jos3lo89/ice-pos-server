@@ -14,6 +14,7 @@ import { OrdersModule } from './modules/orders/orders.module';
 import { PaymentsModule } from './modules/payments/payments.module';
 import { CashSessionsService } from './modules/cash-sessions/cash-sessions.service';
 import { CashSessionsModule } from './modules/cash-sessions/cash-sessions.module';
+import { ClientsModule } from './modules/clients/clients.module';
 
 @Module({
   imports: [
@@ -32,6 +33,7 @@ import { CashSessionsModule } from './modules/cash-sessions/cash-sessions.module
     OrdersModule,
     PaymentsModule,
     CashSessionsModule,
+    ClientsModule,
   ],
   controllers: [AppController],
   providers: [AppService, CashSessionsService],
