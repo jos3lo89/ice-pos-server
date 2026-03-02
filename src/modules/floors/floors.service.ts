@@ -114,6 +114,12 @@ export class FloorsService {
                 estado: true,
                 total: true,
                 fecha_creacion: true,
+                usuarios: {
+                  select: {
+                    id: true,
+                    nombre_completo: true,
+                  },
+                },
               },
             },
           },

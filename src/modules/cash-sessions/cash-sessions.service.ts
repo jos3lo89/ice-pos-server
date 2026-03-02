@@ -2,8 +2,8 @@ import { PrismaService } from '@/core/prisma/prisma.service';
 import {
   BadRequestException,
   ConflictException,
-  HttpException,
   Injectable,
+  HttpException,
   InternalServerErrorException,
   Logger,
   NotFoundException,
@@ -12,7 +12,6 @@ import { OpenSessionDto } from './dto/open-session.dto';
 import {
   EstadoSesionCaja,
   EstadoPago,
-  MetodoPago,
   TipoTransaccionCaja,
   RolUsuario,
 } from '@/generated/prisma/enums';
@@ -20,6 +19,7 @@ import { Decimal } from '@/generated/prisma/internal/prismaNamespace';
 import { CloseSessionDto } from './dto/close-session.dto';
 import { formatearFechaPe } from '@/common/utils/fecha-peru';
 import { Prisma } from '@/generated/prisma/browser';
+import { SessionOrdersQueryDto } from './dto/session-orders-query.dto';
 
 @Injectable()
 export class CashSessionsService {
@@ -107,9 +107,18 @@ export class CashSessionsService {
       }
 
       // pagos por metodo
-      const ventasEfectivo = session.saldo_esperado.minus(
-        session.saldo_apertura,
-      );
+      const ventasEfectivoAgg = await tx.transacciones_caja.aggregate({
+        where: {
+          sesion_caja_id: sessionId,
+          tipo: TipoTransaccionCaja.ingreso_venta,
+        },
+        _sum: { monto: true },
+      });
+
+      const ventasEfectivo = ventasEfectivoAgg._sum.monto ?? new Decimal(0);
+      // const ventasEfectivo = session.saldo_esperado.minus(
+      //   session.saldo_apertura,
+      // );
 
       const totalDigital = session.total_yape
         .plus(session.total_plin)
@@ -207,9 +216,7 @@ export class CashSessionsService {
     });
   }
 
-  // ===========================================================================
-  // OBTENER ESTADO ACTUAL
-  // ===========================================================================
+  // obteenr la session actula de la caja
   async getCurrentSession(userId: string, userRol: RolUsuario) {
     const whereClause: Prisma.sesiones_cajaWhereInput =
       userRol === RolUsuario.admin
@@ -241,8 +248,41 @@ export class CashSessionsService {
     // ventas efectivo sin apertura
     // const ventasEfectivo =
     //   session.saldo_esperado.toNumber() - session.saldo_esperado.toNumber();
-    const ventasEfectivo =
-      session.saldo_esperado.toNumber() - session.saldo_apertura.toNumber();
+
+    const ventasEfectivoAgg = await this.prisma.transacciones_caja.aggregate({
+      where: {
+        sesion_caja_id: session.id,
+        tipo: TipoTransaccionCaja.ingreso_venta,
+      },
+      _sum: { monto: true },
+    });
+
+    // Consultar movimientos manuales separados
+    const movimientosAgg = await this.prisma.transacciones_caja.groupBy({
+      by: ['tipo'],
+      where: {
+        sesion_caja_id: session.id,
+        tipo: {
+          in: [
+            TipoTransaccionCaja.ingreso_manual,
+            TipoTransaccionCaja.egreso_manual,
+            TipoTransaccionCaja.egreso_gasto,
+          ],
+        },
+      },
+      _sum: { monto: true },
+    });
+
+    const ventasEfectivo = ventasEfectivoAgg._sum.monto?.toNumber() ?? 0;
+
+    const movMap = Object.fromEntries(
+      movimientosAgg.map((m) => [m.tipo, m._sum.monto?.toNumber() ?? 0]),
+    );
+
+    const totalIngresos = movMap[TipoTransaccionCaja.ingreso_manual] ?? 0;
+    const totalEgresos =
+      (movMap[TipoTransaccionCaja.egreso_manual] ?? 0) +
+      (movMap[TipoTransaccionCaja.egreso_gasto] ?? 0);
 
     const totalVentas =
       ventasEfectivo +
@@ -250,6 +290,15 @@ export class CashSessionsService {
       session.total_plin.toNumber() +
       session.total_tarjeta.toNumber();
 
+    // const ventasEfectivo =
+    //   session.saldo_esperado.toNumber() - session.saldo_apertura.toNumber();
+
+    // const totalVentas =
+    //   ventasEfectivo +
+    //   session.total_yape.toNumber() +
+    //   session.total_plin.toNumber() +
+    //   session.total_tarjeta.toNumber();
+    //
     return {
       hasActiveSession: true,
       session: {
@@ -266,7 +315,7 @@ export class CashSessionsService {
         // gaveta
         caja_fisica: {
           saldo_apertura: session.saldo_apertura.toNumber(),
-          saldo_esperado: session.saldo_esperado.toNumber(), // cuanto deberia haber
+          saldo_esperado: session.saldo_esperado.toNumber(),
           ventas_efectivo: ventasEfectivo,
         },
         // ventas digitales
@@ -274,6 +323,11 @@ export class CashSessionsService {
           yape: session.total_yape.toNumber(),
           plin: session.total_plin.toNumber(),
           tarjeta: session.total_tarjeta.toNumber(),
+        },
+        movimientos_manuales: {
+          total_ingresos: totalIngresos,
+          total_egresos: totalEgresos,
+          neto: totalIngresos - totalEgresos,
         },
         // resumene
         resumen: {
@@ -284,6 +338,190 @@ export class CashSessionsService {
             session.total_plin.toNumber() +
             session.total_tarjeta.toNumber(),
         },
+      },
+    };
+  }
+
+  // get orders sessipn cahsgetSessionOrders
+  async getSessionOrders(sesionId: string, query: SessionOrdersQueryDto) {
+    const { page = 1, limit = 5, search } = query;
+    const skip = (page - 1) * limit;
+
+    const session = await this.prisma.sesiones_caja.findUnique({
+      where: { id: sesionId },
+    });
+
+    if (!session) throw new NotFoundException('Sesión no encontrada');
+
+    const whereClause: Prisma.ordenesWhereInput = {
+      fecha_creacion: {
+        gte: session.fecha_apertura,
+        lte: session.fecha_cierre ?? new Date(),
+      },
+      pagos: {
+        some: { sesion_caja_id: sesionId },
+      },
+      // OR: [{ numero_orden: { contains: search, mode: 'insensitive' } }],
+      ...(search && {
+        numero_orden: {
+          contains: search.toUpperCase(),
+          mode: 'insensitive',
+        },
+      }),
+    };
+
+    const [total, ordenes] = await this.prisma.$transaction([
+      this.prisma.ordenes.count({ where: whereClause }),
+      this.prisma.ordenes.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy: { fecha_creacion: 'desc' },
+        select: {
+          id: true,
+          numero_orden: true,
+          estado: true,
+          tipo_orden: true,
+          total: true,
+          monto_pagado: true,
+          fecha_creacion: true,
+          fecha_completado: true,
+          mesa_historial: { select: { numero_mesa: true } },
+          usuarios: {
+            select: { nombre_completo: true },
+          },
+          pagos: {
+            where: {
+              sesion_caja_id: sesionId,
+              estado: EstadoPago.pagado,
+            },
+            select: {
+              id: true,
+              numero_pago: true,
+              monto: true,
+              metodo: true,
+              tipo_documento: true,
+              fecha_creacion: true,
+            },
+          },
+          _count: {
+            select: {
+              items_orden: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const lastPage = Math.ceil(total / limit);
+    const next = page < lastPage ? page + 1 : null;
+    const prev = page > 1 ? page - 1 : null;
+
+    return {
+      data: ordenes.map((order) => ({
+        id: order.id,
+        numero_orden: order.numero_orden,
+        estado: order.estado,
+        tipo_orden: order.tipo_orden,
+        mesa: order.mesa_historial?.numero_mesa ?? null,
+        mesero: order.usuarios?.nombre_completo ?? null,
+        total_items: order._count.items_orden,
+        // Montos
+        total: order.total.toNumber(),
+        monto_pagado: order.monto_pagado.toNumber(),
+        pendiente: order.total.minus(order.monto_pagado).toNumber(),
+        esta_pagado_completo: order.monto_pagado.greaterThanOrEqualTo(
+          order.total,
+        ),
+        fecha_creacion: order.fecha_creacion,
+        fecha_completado: order.fecha_completado ?? null,
+        pagos: order.pagos.map((p) => ({
+          id: p.id,
+          numero_pago: p.numero_pago,
+          monto: p.monto.toNumber(),
+          metodo: p.metodo,
+          tipo_documento: p.tipo_documento,
+          fecha: p.fecha_creacion,
+        })),
+      })),
+      meta: {
+        total,
+        page,
+        lastPage,
+        hasNext: page < lastPage,
+        hasPrev: page > 1,
+        nextPage: next,
+        prevPage: prev,
+      },
+    };
+  }
+
+  async getSessionPayments(sesionId: string, query: SessionOrdersQueryDto) {
+    const { page = 1, limit = 5, search } = query;
+    const skip = (page - 1) * limit;
+
+    const whereClause: Prisma.pagosWhereInput = {
+      sesion_caja_id: sesionId,
+      estado: EstadoPago.pagado,
+      ...(search && {
+        ordenes: {
+          numero_orden: {
+            contains: search.toUpperCase(),
+            mode: 'insensitive',
+          },
+        },
+      }),
+    };
+
+    const [total, pagos] = await this.prisma.$transaction([
+      this.prisma.pagos.count({ where: whereClause }),
+      this.prisma.pagos.findMany({
+        skip,
+        take: limit,
+        where: whereClause,
+        select: {
+          id: true,
+          numero_pago: true,
+          monto: true,
+          monto_recibido: true,
+          vuelto: true,
+          metodo: true,
+          tipo_documento: true,
+          fecha_creacion: true,
+          ordenes: {
+            select: {
+              id: true,
+              numero_orden: true,
+              estado: true,
+              tipo_orden: true,
+              total: true,
+              monto_pagado: true,
+              fecha_creacion: true,
+              fecha_completado: true,
+              mesa_historial: { select: { numero_mesa: true } },
+              usuarios: { select: { nombre_completo: true } },
+              _count: { select: { items_orden: true } },
+            },
+          },
+        },
+        orderBy: { fecha_creacion: 'desc' },
+      }),
+    ]);
+
+    const lastPage = Math.ceil(total / limit);
+    const next = page < lastPage ? page + 1 : null;
+    const prev = page > 1 ? page - 1 : null;
+
+    return {
+      data: pagos,
+      meta: {
+        total,
+        page,
+        lastPage,
+        hasNext: page < lastPage,
+        hasPrev: page > 1,
+        nextPage: next,
+        prevPage: prev,
       },
     };
   }

@@ -15,6 +15,7 @@ import { PaymentsModule } from './modules/payments/payments.module';
 import { CashSessionsService } from './modules/cash-sessions/cash-sessions.service';
 import { CashSessionsModule } from './modules/cash-sessions/cash-sessions.module';
 import { ClientsModule } from './modules/clients/clients.module';
+import { CashMovementsModule } from './modules/cash-movements/cash-movements.module';
 
 @Module({
   imports: [
@@ -34,6 +35,7 @@ import { ClientsModule } from './modules/clients/clients.module';
     PaymentsModule,
     CashSessionsModule,
     ClientsModule,
+    CashMovementsModule,
   ],
   controllers: [AppController],
   providers: [AppService, CashSessionsService],

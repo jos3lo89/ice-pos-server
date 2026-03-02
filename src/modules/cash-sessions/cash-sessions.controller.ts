@@ -10,6 +10,7 @@ import {
   ParseUUIDPipe,
   Patch,
   Post,
+  Query,
 } from '@nestjs/common';
 import { CloseSessionDto } from './dto/close-session.dto';
 import { Auth } from '@/common/decorators/auth.decorator';
@@ -19,6 +20,7 @@ import { CashSessionsService } from './cash-sessions.service';
 import { RequireCashSession } from '@/common/decorators/require-cash-register.decorator';
 import { type CashSessionPayload } from '@/common/interfaces/current-cash-session.interface';
 import { CurrentCashSession } from '@/common/decorators/current-cash-session.decorator';
+import { SessionOrdersQueryDto } from './dto/session-orders-query.dto';
 
 @Controller('cash-sessions')
 export class CashSessionsController {
@@ -59,5 +61,42 @@ export class CashSessionsController {
       );
     }
     return this.cashSessionsService.closeSession(id, dto, user.id);
+  }
+
+  // get current order by cash session avtive
+  @Get(':sessionId/orders')
+  @Auth(RolUsuario.admin, RolUsuario.cajero)
+  getSessionOrders(
+    @Param(
+      'sessionId',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        exceptionFactory() {
+          return new BadRequestException('id inválido');
+        },
+      }),
+    )
+    sessionId: string,
+    @Query() query: SessionOrdersQueryDto,
+  ) {
+    return this.cashSessionsService.getSessionOrders(sessionId, query);
+  }
+
+  @Get(':sessionId/payments')
+  @Auth(RolUsuario.admin, RolUsuario.cajero)
+  getSessionPayments(
+    @Param(
+      'sessionId',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        exceptionFactory() {
+          return new BadRequestException('id inválido');
+        },
+      }),
+    )
+    sessionId: string,
+    @Query() query: SessionOrdersQueryDto,
+  ) {
+    return this.cashSessionsService.getSessionPayments(sessionId, query);
   }
 }

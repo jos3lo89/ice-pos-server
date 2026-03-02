@@ -303,7 +303,7 @@ export class PaymentsService {
             numero_orden: true,
             tipo_orden: true,
             notas: true,
-            mesa_actual: { select: { numero_mesa: true } },
+            mesa_historial: { select: { numero_mesa: true } },
             usuarios: { select: { nombre_completo: true } },
           },
         },
@@ -326,6 +326,7 @@ export class PaymentsService {
               select: {
                 nombre_producto: true,
                 nombre_variante: true,
+                precio_variante: true,
                 cantidad: true,
                 precio_unitario: true,
                 total_modificadores: true,
@@ -363,7 +364,7 @@ export class PaymentsService {
       orden: {
         numero_orden: pago.ordenes.numero_orden,
         tipo_orden: pago.ordenes.tipo_orden,
-        mesa: pago.ordenes.mesa_actual?.numero_mesa ?? null,
+        mesa: pago.ordenes.mesa_historial?.numero_mesa ?? null,
         mesero: pago.ordenes.usuarios?.nombre_completo ?? null,
         notas: pago.ordenes.notas ?? null,
       },
@@ -381,6 +382,7 @@ export class PaymentsService {
       items: pago.detalles_pago.map((d) => ({
         nombre_producto: d.items_orden.nombre_producto,
         nombre_variante: d.items_orden.nombre_variante ?? null,
+        precio_variante: d.items_orden.precio_variante.toNumber() ?? null,
         cantidad: d.cantidad_pagada,
         precio_unitario: d.items_orden.precio_unitario.toNumber(),
         total_modificadores: d.items_orden.total_modificadores.toNumber(),

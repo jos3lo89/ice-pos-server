@@ -408,6 +408,18 @@ export class OrdersService {
             esta_activo: true,
           },
         },
+        // mesa_historial: {
+        //   include: {
+        //     pisos: {
+        //       select: {
+        //         id: true,
+        //         nombre: true,
+        //         nivel: true,
+        //         esta_activo: true,
+        //       },
+        //     },
+        //   },
+        // },
         mesa_actual: {
           include: {
             pisos: {
@@ -718,6 +730,7 @@ export class OrdersService {
         nombre_producto: item.nombre_producto,
         nombre_variante: item.nombre_variante,
         precio_variante: item.precio_variante.toNumber(),
+        estado: item.estado,
         cantidad: item.cantidad,
         cantidad_pagada: cantidadPagada,
         cantidad_pendiente: item.cantidad - cantidadPagada,
