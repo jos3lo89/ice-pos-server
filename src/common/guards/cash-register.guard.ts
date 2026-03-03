@@ -28,7 +28,6 @@ export class CashRegisterGuard implements CanActivate {
     const request = context.switchToHttp().getRequest();
     const user = request.user;
 
-    // Una sola query en lugar de dos
     const sesionAbierta = await this.prisma.sesiones_caja.findFirst({
       where: {
         cajero_id: user.sub,
@@ -42,13 +41,16 @@ export class CashRegisterGuard implements CanActivate {
     });
 
     if (!sesionAbierta) {
-      throw new ForbiddenException({
-        success: false,
-        error: {
-          code: 'CASH_REGISTER_REQUIRED',
-          message: 'Debe abrir una caja para realizar esta operación',
-        },
-      });
+      throw new ForbiddenException(
+        'Debe abrir una caja para realizar esta operación',
+      );
+      // throw new ForbiddenException({
+      //   success: false,
+      //   error: {
+      //     code: 'CASH_REGISTER_REQUIRED',
+      //     message: 'Debe abrir una caja para realizar esta operación',
+      //   },
+      // });
     }
 
     console.log({

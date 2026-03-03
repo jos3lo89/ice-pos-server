@@ -770,4 +770,15 @@ export class OrdersService {
       historial_pagos: order.pagos, // Para reimprimir tickets
     };
   }
+
+  // TODO: verficar las sessiones para partir los  ordenes canceladas
+  async getCanceledOrders() {
+    const canceledOrders = await this.prisma.ordenes.findMany({
+      where: {
+        estado: EstadoOrden.cancelado,
+      },
+    });
+
+    return canceledOrders;
+  }
 }

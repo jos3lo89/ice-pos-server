@@ -31,6 +31,12 @@ export class OrdersController {
     return this.ordersService.createOrder(body, user.id);
   }
 
+  @Get('canceled')
+  @Auth(RolUsuario.admin, RolUsuario.cajero)
+  getCanceledOrders() {
+    return this.ordersService.getCanceledOrders();
+  }
+
   @Post(':id/items')
   @Auth(RolUsuario.admin, RolUsuario.cajero, RolUsuario.mesero)
   addItemsToOrder(
