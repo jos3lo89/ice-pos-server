@@ -14,12 +14,14 @@ import {
   EstadoPago,
   TipoTransaccionCaja,
   RolUsuario,
+  EstadoOrden,
 } from '@/generated/prisma/enums';
 import { Decimal } from '@/generated/prisma/internal/prismaNamespace';
 import { CloseSessionDto } from './dto/close-session.dto';
 import { formatearFechaPe } from '@/common/utils/fecha-peru';
 import { Prisma } from '@/generated/prisma/browser';
 import { SessionOrdersQueryDto } from './dto/session-orders-query.dto';
+import { FindCashSessionQueryDto } from './dto/find-cash-session-query.dto';
 
 @Injectable()
 export class CashSessionsService {
@@ -354,14 +356,7 @@ export class CashSessionsService {
     if (!session) throw new NotFoundException('Sesión no encontrada');
 
     const whereClause: Prisma.ordenesWhereInput = {
-      fecha_creacion: {
-        gte: session.fecha_apertura,
-        lte: session.fecha_cierre ?? new Date(),
-      },
-      pagos: {
-        some: { sesion_caja_id: sesionId },
-      },
-      // OR: [{ numero_orden: { contains: search, mode: 'insensitive' } }],
+      sesion_caja_id: sesionId,
       ...(search && {
         numero_orden: {
           contains: search.toUpperCase(),
@@ -514,6 +509,51 @@ export class CashSessionsService {
 
     return {
       data: pagos,
+      meta: {
+        total,
+        page,
+        lastPage,
+        hasNext: page < lastPage,
+        hasPrev: page > 1,
+        nextPage: next,
+        prevPage: prev,
+      },
+    };
+  }
+
+  // historial de sessiones por usuario
+  async getCashSessionHistory(userId: string, query: FindCashSessionQueryDto) {
+    const { page = 1, limit = 10 } = query;
+    const skip = (page - 1) * limit;
+
+    const whereClause: Prisma.sesiones_cajaWhereInput = {
+      cajero_id: userId,
+    };
+
+    const [total, sessions] = await this.prisma.$transaction([
+      this.prisma.sesiones_caja.count({ where: whereClause }),
+      this.prisma.sesiones_caja.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy: { fecha_apertura: 'desc' },
+        include: {
+          usuarios: {
+            select: {
+              id: true,
+              nombre_completo: true,
+            },
+          },
+        },
+      }),
+    ]);
+
+    const lastPage = Math.ceil(total / limit);
+    const next = page < lastPage ? page + 1 : null;
+    const prev = page > 1 ? page - 1 : null;
+
+    return {
+      data: sessions,
       meta: {
         total,
         page,

@@ -21,6 +21,7 @@ import { RequireCashSession } from '@/common/decorators/require-cash-register.de
 import { type CashSessionPayload } from '@/common/interfaces/current-cash-session.interface';
 import { CurrentCashSession } from '@/common/decorators/current-cash-session.decorator';
 import { SessionOrdersQueryDto } from './dto/session-orders-query.dto';
+import { FindCashSessionQueryDto } from './dto/find-cash-session-query.dto';
 
 @Controller('cash-sessions')
 export class CashSessionsController {
@@ -98,5 +99,24 @@ export class CashSessionsController {
     @Query() query: SessionOrdersQueryDto,
   ) {
     return this.cashSessionsService.getSessionPayments(sessionId, query);
+  }
+
+  // historial de sessiones por usuario
+  @Get(':userId/history')
+  @Auth(RolUsuario.admin, RolUsuario.cajero)
+  getCashSessionHistory(
+    @Param(
+      'userId',
+      new ParseUUIDPipe({
+        errorHttpStatusCode: HttpStatus.BAD_REQUEST,
+        exceptionFactory() {
+          return new BadRequestException('id invalido');
+        },
+      }),
+    )
+    userId: string,
+    @Query() query: FindCashSessionQueryDto,
+  ) {
+    return this.cashSessionsService.getCashSessionHistory(userId, query);
   }
 }

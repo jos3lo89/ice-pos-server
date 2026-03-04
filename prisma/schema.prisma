@@ -31,6 +31,7 @@ model sesiones_caja {
   usuarios           usuarios             @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   transacciones_caja transacciones_caja[]
   pagos              pagos[]
+  ordenes            ordenes[]
 }
 
 model transacciones_caja {
@@ -133,12 +134,14 @@ model ordenes {
   fecha_creacion      DateTime    @default(now())
   fecha_actualizacion DateTime    @updatedAt
   fecha_completado    DateTime?
+  sesion_caja_id      String?
 
   items_orden    items_orden[]
-  usuarios       usuarios?     @relation(fields: [mesero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  usuarios       usuarios?      @relation(fields: [mesero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   pagos          pagos[]
-  mesa_historial mesas?        @relation("RelacionHistorial", fields: [mesa_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  mesa_actual    mesas?        @relation("RelacionActual")
+  mesa_historial mesas?         @relation("RelacionHistorial", fields: [mesa_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  mesa_actual    mesas?         @relation("RelacionActual")
+  sesiones_caja  sesiones_caja? @relation(fields: [sesion_caja_id], references: [id])
 
   @@index([fecha_creacion], map: "idx_ordenes_fecha_creacion")
   @@index([estado], map: "idx_ordenes_estado")

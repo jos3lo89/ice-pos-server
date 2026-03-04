@@ -20,6 +20,7 @@ import { AddOrderItemDto } from './dto/add-order-items.dto';
 import { Decimal } from '@/generated/prisma/internal/prismaNamespace';
 import { SendComandDto } from './dto/send-comand.dto';
 import { CancelOrderItemDto } from './dto/cancel-order-item.dto';
+import { FindCanceledOrdersQryDto } from './dto/find-canceled-orders.dto';
 
 @Injectable()
 export class OrdersService {
@@ -27,7 +28,11 @@ export class OrdersService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async createOrder(dto: CreateOrderDto, meseroId: string) {
+  async createOrder(
+    dto: CreateOrderDto,
+    meseroId: string,
+    cashSessionId: string,
+  ) {
     try {
       const created = await this.prisma.$transaction(async (tx) => {
         const tableCheck = await tx.mesas.findUnique({
@@ -48,6 +53,7 @@ export class OrdersService {
 
         const order = await tx.ordenes.create({
           data: {
+            sesion_caja_id: cashSessionId,
             numero_orden: orderNumber,
             mesa_id: dto.table_id,
             mesero_id: meseroId,
@@ -772,13 +778,46 @@ export class OrdersService {
   }
 
   // TODO: verficar las sessiones para partir los  ordenes canceladas
-  async getCanceledOrders() {
-    const canceledOrders = await this.prisma.ordenes.findMany({
-      where: {
-        estado: EstadoOrden.cancelado,
-      },
-    });
+  async getCanceledOrders(sessionId: string, qry: FindCanceledOrdersQryDto) {
+    const { page = 1, limit = 10, search } = qry;
+    const skip = (page - 1) * limit;
 
-    return canceledOrders;
+    const whereClause: Prisma.ordenesWhereInput = {
+      estado: EstadoOrden.cancelado,
+      sesion_caja_id: sessionId,
+      ...(search && {
+        numero_orden: {
+          contains: search.toUpperCase(),
+          mode: 'insensitive',
+        },
+      }),
+    };
+
+    const [total, orders] = await this.prisma.$transaction([
+      this.prisma.ordenes.count({ where: whereClause }),
+      this.prisma.ordenes.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy: { fecha_creacion: 'desc' },
+      }),
+    ]);
+
+    const lastPage = Math.ceil(total / limit);
+    const next = page < lastPage ? page + 1 : null;
+    const prev = page > 1 ? page - 1 : null;
+
+    return {
+      data: orders,
+      meta: {
+        total,
+        page,
+        lastPage,
+        hasNext: page < lastPage,
+        hasPrev: page > 1,
+        nextPage: next,
+        prevPage: prev,
+      },
+    };
   }
 }
