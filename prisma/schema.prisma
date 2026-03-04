@@ -9,12 +9,20 @@ datasource db {
 }
 
 model sesiones_caja {
-  id             String            @id @default(uuid())
+  id             String  @id @default(uuid())
   cajero_id      String
-  saldo_apertura Decimal           @default(0) @db.Decimal(10, 2)
-  saldo_esperado Decimal?          @default(0) @db.Decimal(10, 2)
-  saldo_real     Decimal?          @default(0) @db.Decimal(10, 2)
-  diferencia     Decimal?          @default(0) @db.Decimal(10, 2)
+  saldo_apertura Decimal @default(0) @db.Decimal(10, 2)
+
+  // caja fisica
+  saldo_esperado Decimal @default(0) @db.Decimal(10, 2) // Apertura + ingresos efectivo - egresos
+  saldo_real     Decimal @default(0) @db.Decimal(10, 2) // Lo que el cajero cuenta físicamente
+  diferencia     Decimal @default(0) @db.Decimal(10, 2) // saldo_real - saldo_esperado
+
+  // ventas digitales
+  total_yape    Decimal @default(0) @db.Decimal(10, 2)
+  total_plin    Decimal @default(0) @db.Decimal(10, 2)
+  total_tarjeta Decimal @default(0) @db.Decimal(10, 2)
+
   estado         EstadoSesionCaja? @default(abierta)
   notas          String?
   fecha_apertura DateTime          @default(now())
@@ -23,17 +31,22 @@ model sesiones_caja {
   usuarios           usuarios             @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   transacciones_caja transacciones_caja[]
   pagos              pagos[]
+  ordenes            ordenes[]
 }
 
 model transacciones_caja {
   id             String              @id @default(uuid())
   sesion_caja_id String?
+  cajero_id      String
+  pago_id        String?
   tipo           TipoTransaccionCaja
   monto          Decimal             @db.Decimal(10, 2)
   descripcion    String?
   fecha_creacion DateTime            @default(now())
 
   sesiones_caja sesiones_caja? @relation(fields: [sesion_caja_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  usuarios      usuarios       @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  pagos         pagos?         @relation(fields: [pago_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 }
 
 model categorias {
@@ -116,17 +129,19 @@ model ordenes {
   tipo_orden          TipoOrden   @default(en_local)
   motivo_cancelacion  String?
   notas               String?
-  total               Decimal?    @default(0) @db.Decimal(10, 2)
-  monto_pagado        Decimal?    @default(0) @db.Decimal(10, 2)
+  total               Decimal     @default(0) @db.Decimal(10, 2)
+  monto_pagado        Decimal     @default(0) @db.Decimal(10, 2)
   fecha_creacion      DateTime    @default(now())
   fecha_actualizacion DateTime    @updatedAt
   fecha_completado    DateTime?
+  sesion_caja_id      String?
 
   items_orden    items_orden[]
-  usuarios       usuarios?     @relation(fields: [mesero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  usuarios       usuarios?      @relation(fields: [mesero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   pagos          pagos[]
-  mesa_historial mesas?        @relation("RelacionHistorial", fields: [mesa_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  mesa_actual    mesas?        @relation("RelacionActual")
+  mesa_historial mesas?         @relation("RelacionHistorial", fields: [mesa_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  mesa_actual    mesas?         @relation("RelacionActual")
+  sesiones_caja  sesiones_caja? @relation(fields: [sesion_caja_id], references: [id])
 
   @@index([fecha_creacion], map: "idx_ordenes_fecha_creacion")
   @@index([estado], map: "idx_ordenes_estado")
@@ -146,25 +161,30 @@ model detalles_pago {
 }
 
 model pagos {
-  id                  String          @id @default(uuid())
-  numero_pago         String          @unique @db.VarChar(20)
-  orden_id            String
-  cajero_id           String?
-  cliente_id          String?
-  sesion_caja_id      String?
-  monto               Decimal         @default(0) @db.Decimal(10, 2)
-  metodo              MetodoPago      @default(efectivo)
-  tipo_documento      TipoDocumento   @default(ticket)
-  estado              EstadoPago      @default(pendiente)
-  id_externo          String?         @db.VarChar(100)
+  id             String     @id @default(uuid())
+  numero_pago    String     @unique @db.VarChar(20)
+  orden_id       String
+  cajero_id      String?
+  cliente_id     String?
+  sesion_caja_id String?
+  monto          Decimal    @default(0) @db.Decimal(10, 2)
+  metodo         MetodoPago @default(efectivo)
+
+  monto_recibido Decimal? @db.Decimal(10, 2)
+  vuelto         Decimal? @default(0) @db.Decimal(10, 2)
+
+  tipo_documento      TipoDocumento        @default(ticket)
+  estado              EstadoPago           @default(pendiente)
+  id_externo          String?              @db.VarChar(100)
   notas               String?
-  fecha_creacion      DateTime        @default(now())
-  fecha_actualizacion DateTime        @updatedAt
+  fecha_creacion      DateTime             @default(now())
+  fecha_actualizacion DateTime             @updatedAt
   detalles_pago       detalles_pago[]
-  usuarios            usuarios?       @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  sesiones_caja       sesiones_caja?  @relation(fields: [sesion_caja_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  clientes            clientes?       @relation(fields: [cliente_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  ordenes             ordenes         @relation(fields: [orden_id], references: [id], onUpdate: NoAction)
+  usuarios            usuarios?            @relation(fields: [cajero_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  sesiones_caja       sesiones_caja?       @relation(fields: [sesion_caja_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  clientes            clientes?            @relation(fields: [cliente_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  ordenes             ordenes              @relation(fields: [orden_id], references: [id], onUpdate: NoAction)
+  transaccionesCajas  transacciones_caja[]
 
   @@index([sesion_caja_id], map: "idx_pagos_sesion_caja")
   @@index([orden_id], map: "idx_pagos_orden")
@@ -266,9 +286,10 @@ model usuarios {
   fecha_creacion      DateTime   @default(now())
   fecha_actualizacion DateTime   @updatedAt
 
-  sesiones_caja sesiones_caja[]
-  ordenes       ordenes[]
-  pagos         pagos[]
+  sesiones_caja      sesiones_caja[]
+  ordenes            ordenes[]
+  pagos              pagos[]
+  transaccionesCajas transacciones_caja[]
 
   @@index([rol], map: "idx_usuarios_rol")
 }
@@ -279,8 +300,12 @@ enum EstadoSesionCaja {
 }
 
 enum TipoTransaccionCaja {
-  ingreso
-  egreso
+  apertura // Monto base inicial
+  ingreso_venta // Pago en efectivo de una orden
+  egreso_gasto // Compra de insumos 
+  ingreso_manual // Ingreso extraordinario
+  egreso_manual // Retiro extraordinario
+  cierre // Registro del arqueo final
 }
 
 enum TipoDocumento {

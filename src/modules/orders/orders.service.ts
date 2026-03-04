@@ -3,6 +3,7 @@ import {
   EstadoItemOrden,
   EstadoMesa,
   EstadoOrden,
+  EstadoPago,
 } from '@/generated/prisma/enums';
 import {
   BadRequestException,
@@ -19,6 +20,7 @@ import { AddOrderItemDto } from './dto/add-order-items.dto';
 import { Decimal } from '@/generated/prisma/internal/prismaNamespace';
 import { SendComandDto } from './dto/send-comand.dto';
 import { CancelOrderItemDto } from './dto/cancel-order-item.dto';
+import { FindCanceledOrdersQryDto } from './dto/find-canceled-orders.dto';
 
 @Injectable()
 export class OrdersService {
@@ -26,7 +28,11 @@ export class OrdersService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async createOrder(dto: CreateOrderDto, meseroId: string) {
+  async createOrder(
+    dto: CreateOrderDto,
+    meseroId: string,
+    cashSessionId: string,
+  ) {
     try {
       const created = await this.prisma.$transaction(async (tx) => {
         const tableCheck = await tx.mesas.findUnique({
@@ -47,6 +53,7 @@ export class OrdersService {
 
         const order = await tx.ordenes.create({
           data: {
+            sesion_caja_id: cashSessionId,
             numero_orden: orderNumber,
             mesa_id: dto.table_id,
             mesero_id: meseroId,
@@ -407,6 +414,18 @@ export class OrdersService {
             esta_activo: true,
           },
         },
+        // mesa_historial: {
+        //   include: {
+        //     pisos: {
+        //       select: {
+        //         id: true,
+        //         nombre: true,
+        //         nivel: true,
+        //         esta_activo: true,
+        //       },
+        //     },
+        //   },
+        // },
         mesa_actual: {
           include: {
             pisos: {
@@ -655,5 +674,150 @@ export class OrdersService {
         'Error inesperado al cancelar el item',
       );
     }
+  }
+
+  // get order detail for payment
+  async orderDetailPayment(orderId: string) {
+    const order = await this.prisma.ordenes.findUnique({
+      where: {
+        id: orderId,
+      },
+      include: {
+        mesa_historial: {
+          include: {
+            pisos: true,
+          },
+        },
+        _count: {
+          select: {
+            items_orden: true,
+            pagos: true,
+          },
+        },
+        pagos: {
+          where: { estado: EstadoPago.pagado },
+          orderBy: { fecha_creacion: 'asc' },
+          select: {
+            id: true,
+            numero_pago: true,
+            monto: true,
+            vuelto: true,
+            monto_recibido: true,
+            metodo: true,
+            tipo_documento: true,
+            fecha_creacion: true,
+          },
+        },
+        items_orden: {
+          include: {
+            modificadores_item_orden: true,
+            detalles_pago: {
+              include: {
+                pagos: { select: { estado: true } },
+              },
+            },
+          },
+        },
+        usuarios: { select: { nombre_completo: true } },
+      },
+    });
+
+    if (!order) throw new NotFoundException('Orden no encontrada');
+
+    const itemsConEstadoPago = order.items_orden.map((item) => {
+      const cantidadPagada = item.detalles_pago
+        .filter((d) => d.pagos?.estado === EstadoPago.pagado)
+        .reduce((sum, d) => sum + d.cantidad_pagada, 0);
+
+      const estaPagado = cantidadPagada >= item.cantidad;
+
+      return {
+        id: item.id,
+        nombre_producto: item.nombre_producto,
+        nombre_variante: item.nombre_variante,
+        precio_variante: item.precio_variante.toNumber(),
+        estado: item.estado,
+        cantidad: item.cantidad,
+        cantidad_pagada: cantidadPagada,
+        cantidad_pendiente: item.cantidad - cantidadPagada,
+        precio_unitario: item.precio_unitario.toNumber(),
+        total_modificadores: item.total_modificadores.toNumber(),
+        total_linea: item.total_linea.toNumber(),
+        esta_pagado: estaPagado,
+        modificadores: item.modificadores_item_orden.map((m) => ({
+          nombre: m.nombre_modificador,
+          precio: m.precio_adicional.toNumber(),
+        })),
+      };
+    });
+
+    const totalOrden = order.total.toNumber();
+    const totalPagado = order.monto_pagado.toNumber();
+    const totalPendiente = totalOrden - totalPagado;
+
+    return {
+      orden: {
+        id: order.id,
+        numero_order: order.numero_orden,
+        estado: order.estado,
+        tipo_order: order.tipo_orden,
+        mesero: order.usuarios?.nombre_completo ?? null,
+        mesa: order.mesa_historial?.numero_mesa ?? null,
+        piso: order.mesa_historial?.pisos?.nivel ?? null,
+        notas: order.notas,
+      },
+      items: itemsConEstadoPago,
+      resumen: {
+        total_orden: totalOrden,
+        total_pagado: totalPagado,
+        total_pendiente: totalPendiente,
+        esta_pagado_completo: totalPendiente <= 0,
+      },
+      historial_pagos: order.pagos, // Para reimprimir tickets
+    };
+  }
+
+  // TODO: verficar las sessiones para partir los  ordenes canceladas
+  async getCanceledOrders(sessionId: string, qry: FindCanceledOrdersQryDto) {
+    const { page = 1, limit = 10, search } = qry;
+    const skip = (page - 1) * limit;
+
+    const whereClause: Prisma.ordenesWhereInput = {
+      estado: EstadoOrden.cancelado,
+      sesion_caja_id: sessionId,
+      ...(search && {
+        numero_orden: {
+          contains: search.toUpperCase(),
+          mode: 'insensitive',
+        },
+      }),
+    };
+
+    const [total, orders] = await this.prisma.$transaction([
+      this.prisma.ordenes.count({ where: whereClause }),
+      this.prisma.ordenes.findMany({
+        where: whereClause,
+        skip,
+        take: limit,
+        orderBy: { fecha_creacion: 'desc' },
+      }),
+    ]);
+
+    const lastPage = Math.ceil(total / limit);
+    const next = page < lastPage ? page + 1 : null;
+    const prev = page > 1 ? page - 1 : null;
+
+    return {
+      data: orders,
+      meta: {
+        total,
+        page,
+        lastPage,
+        hasNext: page < lastPage,
+        hasPrev: page > 1,
+        nextPage: next,
+        prevPage: prev,
+      },
+    };
   }
 }
