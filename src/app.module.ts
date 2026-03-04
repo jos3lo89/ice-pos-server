@@ -16,6 +16,7 @@ import { CashSessionsService } from './modules/cash-sessions/cash-sessions.servi
 import { CashSessionsModule } from './modules/cash-sessions/cash-sessions.module';
 import { ClientsModule } from './modules/clients/clients.module';
 import { CashMovementsModule } from './modules/cash-movements/cash-movements.module';
+import { ReportsModule } from './modules/reports/reports.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { CashMovementsModule } from './modules/cash-movements/cash-movements.mod
     CashSessionsModule,
     ClientsModule,
     CashMovementsModule,
+    ReportsModule,
   ],
   controllers: [AppController],
   providers: [AppService, CashSessionsService],
