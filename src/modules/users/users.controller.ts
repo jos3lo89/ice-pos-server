@@ -29,6 +29,12 @@ export class UsersController {
     return this.usersService.getProfile(user.id);
   }
 
+  // get cajero users
+  @Get('cajeros')
+  getCashierUsers() {
+    return this.usersService.getCashierUsers();
+  }
+
   @Post()
   @Auth(RolUsuario.admin)
   createUser(@Body() body: CreateUserDto) {

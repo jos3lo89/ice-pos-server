@@ -9,7 +9,7 @@ import { CreateUserDto } from './dto/create-user.dto';
 import bcryptjs from 'bcryptjs';
 import { ChangeUserStateDto } from './dto/change-state.dto';
 import { FindUserQueryDto } from './dto/find-user-query.dto';
-import { Prisma } from '@/generated/prisma/client';
+import { Prisma, RolUsuario } from '@/generated/prisma/client';
 
 @Injectable()
 export class UsersService {
@@ -137,5 +137,20 @@ export class UsersService {
     });
 
     return newUser;
+  }
+
+  async getCashierUsers() {
+    const user = await this.prisma.usuarios.findMany({
+      where: {
+        rol: RolUsuario.cajero,
+        esta_activo: true,
+      },
+      select: {
+        id: true,
+        nombre_completo: true,
+      },
+    });
+
+    return user;
   }
 }
