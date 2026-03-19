@@ -1,6 +1,8 @@
 import { Type } from 'class-transformer';
 import {
   IsArray,
+  IsBoolean,
+  isBoolean,
   IsInt,
   IsNotEmpty,
   IsOptional,
@@ -31,4 +33,8 @@ export class AddOrderItemDto {
   @IsString()
   @IsOptional()
   notes?: string;
+
+  @IsBoolean()
+  @IsNotEmpty()
+  separado: boolean;
 }

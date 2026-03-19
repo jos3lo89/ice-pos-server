@@ -53,9 +53,9 @@ export class CashRegisterGuard implements CanActivate {
       // });
     }
 
-    console.log({
-      CurrentCashSession: sesionAbierta,
-    });
+    // console.log({
+    //   CurrentCashSession: sesionAbierta,
+    // });
 
     // Inyectar en el request todo lo útil de la sesión
     request.cashSession = sesionAbierta;
