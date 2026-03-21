@@ -188,6 +188,7 @@ export class OrdersService {
       const commonFields = {
         orden_id: orderId,
         producto_id: product.id,
+        area_impresion: product.area_impresion,
         variante_id: dto.variant_id ?? null,
         precio_variante: variantPrice,
         nombre_variante: variantName,
@@ -431,6 +432,11 @@ export class OrdersService {
         items_orden: {
           include: {
             modificadores_item_orden: true,
+            // productos: {
+            //   select: {
+            //     area_impresion: true,
+            //   },
+            // },
           },
         },
         usuarios: {
