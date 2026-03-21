@@ -183,38 +183,67 @@ export class OrdersService {
       }
 
       // 5. Cálculos Finales de Línea
-      // v_line_total := (v_unit_price + v_mod_total) * p_quantity;
-      const quantityDecimal = new Decimal(dto.quantity);
       const totalPerUnit = unitPrice.plus(modifiersTotal);
+
+      const commonFields = {
+        orden_id: orderId,
+        producto_id: product.id,
+        area_impresion: product.area_impresion,
+        variante_id: dto.variant_id ?? null,
+        precio_variante: variantPrice,
+        nombre_variante: variantName,
+        nombre_producto: product.nombre,
+        precio_unitario: unitPrice,
+        notas: dto.notes || null,
+      };
+
+      const modifiersCreate = modifiersToInsert.map((m) => ({
+        modificador_id: m.modifier_id,
+        nombre_modificador: m.modifier_name,
+        precio_adicional: m.additional_price,
+      }));
+
+      // 6. Insertar Item(s) según flag `separado`
+      if (dto.separado && dto.quantity >= 2) {
+        // Caso separado: N ítems con cantidad = 1 cada uno
+        const lineTotalPerUnit = totalPerUnit.times(new Decimal(1));
+        const modsTotalPerUnit = modifiersTotal.times(new Decimal(1));
+
+        const insertions = Array.from({ length: dto.quantity }, () =>
+          tx.items_orden.create({
+            data: {
+              ...commonFields,
+              cantidad: 1,
+              total_modificadores: modsTotalPerUnit,
+              total_linea: lineTotalPerUnit,
+              modificadores_item_orden: { create: modifiersCreate },
+            },
+            include: { modificadores_item_orden: true },
+          }),
+        );
+
+        const newItems = await Promise.all(insertions);
+
+        // 7. Recalcular Totales de la Orden (una sola vez)
+        await this.updateOrderTotals(tx, orderId);
+
+        return newItems;
+      }
+
+      // Caso normal: 1 ítem con cantidad = N
+      const quantityDecimal = new Decimal(dto.quantity);
       const lineTotal = totalPerUnit.times(quantityDecimal);
       const modifiersTotalLine = modifiersTotal.times(quantityDecimal);
 
-      // 6. Insertar Item y Modificadores (Atomic Write)
       const newItem = await tx.items_orden.create({
         data: {
-          orden_id: orderId,
-          producto_id: product.id,
-          variante_id: dto.variant_id,
+          ...commonFields,
           cantidad: dto.quantity,
-          precio_variante: variantPrice,
-          nombre_variante: variantName,
-          nombre_producto: product.nombre,
-          precio_unitario: unitPrice, // Precio Base + Variante
           total_modificadores: modifiersTotalLine,
           total_linea: lineTotal,
-          notas: dto.notes || null,
-          // Insertamos los modificadores relacionados de una sola vez
-          modificadores_item_orden: {
-            create: modifiersToInsert.map((m) => ({
-              modificador_id: m.modifier_id,
-              nombre_modificador: m.modifier_name,
-              precio_adicional: m.additional_price,
-            })),
-          },
+          modificadores_item_orden: { create: modifiersCreate },
         },
-        include: {
-          modificadores_item_orden: true,
-        },
+        include: { modificadores_item_orden: true },
       });
 
       // 7. Recalcular Totales de la Orden (Llamada interna)
@@ -403,6 +432,11 @@ export class OrdersService {
         items_orden: {
           include: {
             modificadores_item_orden: true,
+            // productos: {
+            //   select: {
+            //     area_impresion: true,
+            //   },
+            // },
           },
         },
         usuarios: {
@@ -664,7 +698,6 @@ export class OrdersService {
       });
     } catch (error) {
       this.logger.error('Error interno al cancelar el item de la orden');
-      console.log(error);
 
       if (error instanceof HttpException) {
         throw error;

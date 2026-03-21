@@ -91,14 +91,15 @@ model modificadores_item_orden {
 }
 
 model items_orden {
-  id              String  @id @default(uuid())
+  id              String           @id @default(uuid())
   orden_id        String
   producto_id     String
   variante_id     String?
-  nombre_producto String  @db.VarChar(100)
-  nombre_variante String? @db.VarChar(100)
-  precio_variante Decimal @default(0) @db.Decimal(10, 2)
-  cantidad        Int     @default(1)
+  nombre_producto String           @db.VarChar(100)
+  nombre_variante String?          @db.VarChar(100)
+  precio_variante Decimal          @default(0) @db.Decimal(10, 2)
+  cantidad        Int              @default(1)
+  area_impresion  DestinoImpresion
 
   precio_unitario     Decimal @db.Decimal(10, 2) // Precio base sin variantes ni extras
   total_modificadores Decimal @default(0) @db.Decimal(10, 2) // Suma de los modificadores
