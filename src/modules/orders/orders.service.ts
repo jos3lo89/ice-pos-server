@@ -21,12 +21,17 @@ import { Decimal } from '@/generated/prisma/internal/prismaNamespace';
 import { SendComandDto } from './dto/send-comand.dto';
 import { CancelOrderItemDto } from './dto/cancel-order-item.dto';
 import { FindCanceledOrdersQryDto } from './dto/find-canceled-orders.dto';
+import { todayPeru } from '@/common/utils/fecha-peru';
+import { PrinterService } from '../printer/printer.service';
 
 @Injectable()
 export class OrdersService {
   private readonly logger = new Logger(OrdersService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly printerService: PrinterService,
+  ) {}
 
   async createOrder(
     dto: CreateOrderDto,
@@ -49,12 +54,16 @@ export class OrdersService {
           );
         }
 
-        const orderNumber = await this.generateOrderNumber(tx);
+        const [orderNumber, numeroDiario] = await Promise.all([
+          this.generateOrderNumber(tx),
+          this.getNextDailyNumber(tx),
+        ]);
 
         const order = await tx.ordenes.create({
           data: {
             sesion_caja_id: cashSessionId,
             numero_orden: orderNumber,
+            numero_diario: numeroDiario,
             mesa_id: dto.table_id,
             mesero_id: meseroId,
             estado: EstadoOrden.pendiente,
@@ -567,6 +576,9 @@ export class OrdersService {
               where: {
                 id: { in: dto.itemsId },
               },
+              include: {
+                modificadores_item_orden: true,
+              },
             },
           },
         });
@@ -587,7 +599,6 @@ export class OrdersService {
         }
 
         const foundItemIds = order.items_orden.map((item) => item.id);
-
         const invalidItems = dto.itemsId.filter(
           (id) => !foundItemIds.includes(id),
         );
@@ -626,10 +637,6 @@ export class OrdersService {
           },
         });
 
-        // TODO: verificar esta funcionalidad
-
-        // Solo cambia a 'preparando' si no quedan items pendientes
-        // Si aún hay items pendientes, la orden sigue en su estado actual
         const nuevoEstadoOrden =
           itemsPendientes === 0 ? EstadoOrden.preparando : order.estado;
 
@@ -638,6 +645,9 @@ export class OrdersService {
           data: { estado: nuevoEstadoOrden },
           include: {
             items_orden: {
+              where: {
+                id: { in: dto.itemsId },
+              },
               include: {
                 modificadores_item_orden: true,
               },
@@ -647,10 +657,56 @@ export class OrdersService {
                 id: true,
                 numero_mesa: true,
                 estado: true,
+                pisos: {
+                  select: {
+                    nivel: true,
+                  },
+                },
+              },
+            },
+            usuarios: {
+              select: {
+                nombre_completo: true,
               },
             },
           },
         });
+
+        try {
+          // TODO: serpara esta logica
+          const ahora = new Date().toLocaleString('es-PE', {
+            timeZone: 'America/Lima',
+            dateStyle: 'short',
+            timeStyle: 'medium',
+          });
+
+          this.printerService.dispatchCommand({
+            fecha: ahora,
+            numero_orden: updatedOrder.numero_orden,
+            tipoPedido: updatedOrder.tipo_orden,
+            mesero: updatedOrder.usuarios?.nombre_completo ?? null,
+            notas: updatedOrder.notas ?? null,
+            numero_diario: updatedOrder.numero_diario,
+            numero_mesa: updatedOrder.mesa_historial?.numero_mesa ?? null,
+            piso: updatedOrder.mesa_historial?.pisos?.nivel ?? null,
+            items_orden: updatedOrder.items_orden.map((i) => ({
+              nombre_producto: i.nombre_producto,
+              nombre_variante: i.nombre_variante,
+              cantidad: i.cantidad,
+              area_impresion: i.area_impresion,
+              notas: i.notas,
+              modificadores_item_orden: i.modificadores_item_orden.map(
+                (mi) => ({
+                  nombre_modificador: mi.nombre_modificador,
+                }),
+              ),
+            })),
+          });
+        } catch (printError) {
+          this.logger.warn(
+            `Orden ${updatedOrder.numero_orden} guardada pero falló impresión: ${printError.message}`,
+          );
+        }
 
         return updatedOrder;
       });
@@ -852,5 +908,19 @@ export class OrdersService {
         prevPage: prev,
       },
     };
+  }
+
+  private async getNextDailyNumber(
+    tx: Prisma.TransactionClient,
+  ): Promise<number> {
+    const hoy = todayPeru();
+
+    const secuencia = await tx.secuencia_diaria.upsert({
+      where: { fecha: hoy },
+      create: { fecha: hoy, ultimo: 1 },
+      update: { ultimo: { increment: 1 } },
+    });
+
+    return secuencia.ultimo;
   }
 }
