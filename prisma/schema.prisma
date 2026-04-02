@@ -124,6 +124,7 @@ model items_orden {
 model ordenes {
   id                  String      @id @default(uuid())
   numero_orden        String      @unique @db.VarChar(20)
+  numero_diario       Int         @default(0)
   mesa_id             String?
   mesero_id           String?
   estado              EstadoOrden @default(pendiente)
@@ -295,6 +296,11 @@ model usuarios {
   @@index([rol], map: "idx_usuarios_rol")
 }
 
+model secuencia_diaria {
+  fecha  DateTime @id @db.Date // la fecha es el PK — una fila por día
+  ultimo Int      @default(0) // último número usado hoy
+}
+
 enum EstadoSesionCaja {
   abierta
   cerrada
@@ -352,6 +358,7 @@ enum EstadoPago {
 enum DestinoImpresion {
   cocina
   bar
+  caja
 }
 
 enum EstadoMesa {
