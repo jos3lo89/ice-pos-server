@@ -1,10 +1,15 @@
+import { TipoOrden } from '@/generated/prisma/enums';
 import { Transform } from 'class-transformer';
-import { IsNotEmpty, IsOptional, IsString, IsUUID } from 'class-validator';
+import { IsEnum, IsOptional, IsString, IsUUID } from 'class-validator';
 
 export class CreateOrderDto {
   @IsUUID('4')
-  @IsNotEmpty()
-  table_id: string;
+  @IsOptional()
+  table_id?: string;
+
+  @IsEnum(TipoOrden)
+  @IsOptional()
+  tipo_orden?: TipoOrden;
 
   @IsString()
   @IsOptional()

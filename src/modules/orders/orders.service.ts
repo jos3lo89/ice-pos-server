@@ -4,6 +4,7 @@ import {
   EstadoMesa,
   EstadoOrden,
   EstadoPago,
+  TipoOrden,
 } from '@/generated/prisma/enums';
 import {
   BadRequestException,
@@ -38,8 +39,37 @@ export class OrdersService {
     meseroId: string,
     cashSessionId: string,
   ) {
+    const tipoOrden = dto.tipo_orden ?? TipoOrden.en_local;
+
     try {
       const created = await this.prisma.$transaction(async (tx) => {
+        const [orderNumber, numeroDiario] = await Promise.all([
+          this.generateOrderNumber(tx),
+          this.getNextDailyNumber(tx),
+        ]);
+
+        // ─── PARA LLEVAR ───────────────────────────────────────────────────
+        if (tipoOrden === TipoOrden.para_llevar) {
+          return await tx.ordenes.create({
+            data: {
+              sesion_caja_id: cashSessionId,
+              numero_orden: orderNumber,
+              numero_diario: numeroDiario,
+              mesero_id: meseroId,
+              estado: EstadoOrden.pendiente,
+              tipo_orden: TipoOrden.para_llevar,
+              notas: dto.notes || null,
+            },
+          });
+        }
+
+        // ─── EN LOCAL ──────────────────────────────────────────────────────
+        if (!dto.table_id) {
+          throw new BadRequestException(
+            'table_id es requerido para órdenes en local',
+          );
+        }
+
         const tableCheck = await tx.mesas.findUnique({
           where: { id: dto.table_id },
         });
@@ -54,11 +84,6 @@ export class OrdersService {
           );
         }
 
-        const [orderNumber, numeroDiario] = await Promise.all([
-          this.generateOrderNumber(tx),
-          this.getNextDailyNumber(tx),
-        ]);
-
         const order = await tx.ordenes.create({
           data: {
             sesion_caja_id: cashSessionId,
@@ -67,6 +92,7 @@ export class OrdersService {
             mesa_id: dto.table_id,
             mesero_id: meseroId,
             estado: EstadoOrden.pendiente,
+            tipo_orden: TipoOrden.en_local,
             notas: dto.notes || null,
           },
         });
@@ -922,5 +948,31 @@ export class OrdersService {
     });
 
     return secuencia.ultimo;
+  }
+
+  // lista de ordenes para llevar
+
+  async ListaOrdenesParaLlevar() {
+    const listOrders = await this.prisma.ordenes.findMany({
+      where: {
+        tipo_orden: TipoOrden.para_llevar,
+        estado: {
+          notIn: [EstadoOrden.completado, EstadoOrden.cancelado],
+        },
+      },
+      orderBy: {
+        fecha_creacion: 'asc',
+      },
+      include: {
+        usuarios: {
+          select: {
+            id: true,
+            nombre_completo: true,
+          },
+        },
+      },
+    });
+
+    return listOrders;
   }
 }

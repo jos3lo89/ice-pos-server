@@ -209,4 +209,12 @@ export class OrdersController {
   ) {
     return this.ordersService.orderDetailPayment(id);
   }
+
+  // ordenes para llevar lista
+
+  @Get('takeout-order-list')
+  @Auth(RolUsuario.admin, RolUsuario.cajero, RolUsuario.mesero)
+  ListaOrdenesParaLlevar() {
+    return this.ordersService.ListaOrdenesParaLlevar();
+  }
 }
